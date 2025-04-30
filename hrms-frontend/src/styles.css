@@ -1,0 +1,170 @@
+/* Global Styles */
+body {
+  margin: 0;
+  font-family: 'Roboto', sans-serif;
+  background-color: #f0f2f5; /* Light background for the entire app */
+}
+
+/* Login Page */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); /* Gradient background */
+  padding: 20px;
+}
+
+.login-box {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-logo {
+  width: 120px;
+  margin-bottom: 20px;
+}
+
+.login-box h2 {
+  margin-bottom: 20px;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.login-box .MuiTextField-root {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.login-box .MuiButton-root {
+  width: 100%;
+  padding: 12px;
+  background-color: #3b82f6;
+  color: white;
+  font-weight: 500;
+  text-transform: none;
+  border-radius: 8px;
+}
+
+.login-box .MuiButton-root:hover {
+  background-color: #1e40af;
+}
+
+/* Container for Sidebar + Content */
+.container {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Navbar */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0; /* Stretch from left edge */
+  right: 0; /* Stretch to right edge */
+  height: 60px;
+  background: #ffffff; /* White background for navbar */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.navbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 100%;
+  padding: 0 20px;
+}
+
+.navbar-logo {
+  height: 40px;
+  align-items: center;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.notification-bell .MuiSvgIcon-root {
+  font-size: 28px;
+  color: #3b82f6;
+}
+
+.notification-bell .MuiBadge-root {
+  position: relative;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 250px;
+  background: linear-gradient(180deg, #1e3a8a 0%, #3b82f6 100%); /* Match login page gradient */
+  color: white;
+  position: fixed;
+  top: 60px; /* Start below navbar */
+  height: calc(100vh - 60px); /* Adjust height to fill remaining viewport */
+  padding: 20px 0;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-item {
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.sidebar-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-icon {
+  color: white;
+  margin-right: 10px;
+}
+
+.sidebar-text {
+  color: white;
+  font-weight: 400;
+}
+
+.sidebar-divider {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Content Area */
+.content {
+  margin-left: 250px; /* Match sidebar width */
+  padding: 80px 20px 20px 40px; /* 40px left padding for 2–3 cm gap from sidebar */
+  background-color: #ffffff; /* White background for content */
+  min-height: 100vh;
+  width: calc(100% - 250px); /* Cover full available width after sidebar */
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 200px;
+    top: 60px;
+    height: calc(100vh - 60px);
+  }
+
+  .content {
+    margin-left: 200px;
+    width: calc(100% - 200px);
+    padding: 20px 20px 20px 30px;
+  }
+
+  .login-box {
+    padding: 30px;
+    max-width: 80%;
+  }
+
+  .navbar-logo {
+    height: 30px;
+  }
+}
