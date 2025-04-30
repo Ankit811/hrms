@@ -18,7 +18,13 @@ function Login() {
         alert('Login failed: Invalid user type');
         return;
       }
-      navigate(`/${loggedInUser.loginType.toLowerCase()}/dashboard`);
+  
+      const userType = loggedInUser.loginType.toLowerCase();
+      if (userType === 'employee') {
+        navigate(`/${userType}/profile`);
+      } else {
+        navigate(`/${userType}/dashboard`);
+      }
     } catch (err) {
       alert('Login failed');
     }
