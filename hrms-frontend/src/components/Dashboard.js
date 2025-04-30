@@ -32,12 +32,14 @@ function Dashboard() {
           pendingLeaves: 0,
         });
       } else if (user.loginType === 'HOD') {
-        const [attendance, leaves] = await Promise.all([
+        const [attendance, leaves, emp] = await Promise.all([
           api.get('/attendance'),
           api.get('/leaves'),
+          api.get('/employees/e/hod-emp'),
         ]);
+        console.log(emp);
         setData({
-          totalEmployees: 0,
+          totalEmployees: emp.data.length,
           presentToday: attendance.data.filter(a => a.status === 'Present' && new Date(a.logDate).toDateString() === new Date().toDateString()).length,
           pendingLeaves: leaves.data.filter(l => l.status.hod === 'Pending').length,
         });
