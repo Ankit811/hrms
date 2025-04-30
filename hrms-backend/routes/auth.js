@@ -19,7 +19,7 @@ const loginLimiter = rateLimit({
 
 router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
-
+  console.log(email, password);
   try {
     const user = await Employee.findOne({ email });
     console.log('Found user:', user);
@@ -29,7 +29,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
     const token = jwt.sign(
-      { id: user._id, loginType: user.loginType, employeeId: user.employeeId },
+      { id: user._id, loginType: user.loginType, employeeId: user.employeeId,department: user.department },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -43,5 +43,16 @@ router.post('/login', loginLimiter, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+router.post('/register', async (req, res)=> {
+  try {
+    const data =req.body;
+    const newEmp = await Employee.create(data);
+    console.log(newEmp);
+    res.status(201).json({ message: 'Employee registered successfully', employee: newEmp });
+  } catch (error) {
+    console.log(error);
+  }
+})
 
 module.exports = router;

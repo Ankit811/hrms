@@ -8,7 +8,6 @@ const router = express.Router();
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
-
     if (req.user.loginType === 'Employee') {
       // Employees can see only their own records
       filter = { employeeId: req.user.employeeId };

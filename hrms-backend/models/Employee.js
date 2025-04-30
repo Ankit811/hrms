@@ -12,7 +12,7 @@ const employeeSchema = new mongoose.Schema({
   address: { type: String, required: true },
   aadharNumber: { type: String, required: true, unique: true },
   dateOfJoining: { type: Date, required: true },
-  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department' },
   position: { type: String, required: true },
   role: { type: String, required: true },
   loginType: { type: String, enum: ['Employee', 'HOD', 'Admin', 'CEO'], required: true },

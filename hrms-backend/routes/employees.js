@@ -41,7 +41,7 @@ const storage = new GridFsStorage({
 const upload = multer({ storage });
 
 // Get all employees (Admin and CEO only)
-router.get('/', auth, role(['Admin', 'CEO']), async (req, res) => {
+router.get('/', auth, role(['Admin', 'CEO','HOD']), async (req, res) => {
   try {
     const employees = await Employee.find().populate('department');
     console.log('Fetched employees:', employees); // Debug log
@@ -293,5 +293,17 @@ router.patch('/:id/lock', auth, role(['Admin']), async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
+
+router.route('/e/hod-emp').get(auth,async (req, res) => {
+  try {
+    const employees = await Employee.find({
+      department: req.user.department
+    });
+    res.json(employees);
+  } catch (err) {
+    console.error('Error fetching employees:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+})
 
 module.exports = router;
