@@ -11,5 +11,5 @@ api.interceptors.request.use(config => {
   }
   return config;
 });
-console.log("reached here")
+
 export default api;
