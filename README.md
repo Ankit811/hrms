@@ -19,12 +19,12 @@ HRMS/ ├── hrms-backend/ # Node.js backend (Express, MongoDB) ├── hrm
 
 ## 🧠 Technologies Used
 
-Frontend:
+**Frontend:**
 - React.js
 - CSS & Tailwind
 - Axios
 
-Backend:
+**Backend:**
 - Node.js + Express
 - MongoDB (Mongoose)
 - JWT Authentication
@@ -33,35 +33,31 @@ Backend:
 
 ## ⚙️ Setup Instructions
 
-1. Clone the repo:
+1. **Clone the repo:**
 
    git clone https://github.com/Ankit811/hrms.git
    cd hrms
 
-Install backend dependencies:
-
+**Install backend dependencies:**
 cd hrms-backend
 npm install
 
-Install frontend dependencies:
-
+**Install frontend dependencies:**
 cd ../hrms-frontend
 npm install
 
-Run backend:
-
+**Run backend:**
 cd ../hrms-backend
 npm start
 
-Run frontend:
-
+**Run frontend:**
 cd ../hrms-frontend
 npm start
 
-💻 Git Automation Scripts
+## 💻 Git Automation Scripts
 This project includes two helpful .bat files for simplifying Git operations on Windows:
 
-🔄 push.bat — Auto Push to GitHub
+## 🔄 push.bat — Auto Push to GitHub
 Stages, commits, and pushes your code changes in one go.
 
 Usage:
@@ -71,7 +67,7 @@ Enter a commit message when prompted.
 
 Your code will be pushed to the main branch on GitHub.
 
-⬇️ pull.bat — Pull Latest Code
+## ⬇️ pull.bat — Pull Latest Code
 Fetches the latest changes from the GitHub repo.
 
 Usage:
@@ -79,14 +75,14 @@ Usage:
 Double-click pull.bat
 Run this before working to avoid merge conflicts.
 
-📝 Notes
+## 📝 Notes
 Git must be installed and configured before using the automation scripts.
 
 Customize the .bat scripts if you're using a branch other than main.
 
 Always pull before push when collaborating across devices or team members.
 
-👨‍💻 Author
+## 👨‍💻 Author
 Ankit Kumar
 8th Semester, B.Tech CSE
 Shaheed Bhagat Singh State University, Ferozepur
