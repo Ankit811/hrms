@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { TextField, Button, Typography, Container, Box } from '@mui/material';
+import { TextField, Button, Typography, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import logo from '../logo.png';
@@ -18,7 +18,7 @@ function Login() {
         alert('Login failed: Invalid user type');
         return;
       }
-  
+
       const userType = loggedInUser.loginType.toLowerCase();
       if (userType === 'employee') {
         navigate(`/${userType}/profile`);
@@ -31,10 +31,46 @@ function Login() {
   };
 
   return (
-    <Container maxWidth="xs" style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, #1976d2, #ffffff)' }}>
-      <Box textAlign="center" sx={{ backgroundColor: 'white', padding: '40px', borderRadius: '10px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }}>
-        <img src={logo} alt="Company Logo" style={{ width: '150px', height: 'auto', marginBottom: '20px' }} />
-        <Typography variant="h4" gutterBottom>HR Management System</Typography>
+    <Box
+      sx={{
+        height: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        bgcolor: 'background.default',
+        background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+        p: 2,
+      }}
+    >
+      <Box
+        sx={{
+          bgcolor: 'background.paper',
+          p: 4,
+          borderRadius: '12px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          width: '100%',
+          maxWidth: '400px',
+          textAlign: 'center',
+          animation: 'fadeIn 0.5s ease-in-out',
+          '@keyframes fadeIn': {
+            from: { opacity: 0, transform: 'translateY(20px)' },
+            to: { opacity: 1, transform: 'translateY(0)' },
+          },
+        }}
+      >
+        <img
+          src={logo}
+          alt="Company Logo"
+          style={{
+            width: '120px',
+            height: 'auto',
+            mb: 2,
+            backgroundColor: 'transparent',
+          }}
+        />
+        <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, color: 'text.primary' }}>
+          HR Management System
+        </Typography>
         <form onSubmit={handleSubmit}>
           <TextField
             label="Email"
@@ -43,6 +79,11 @@ function Login() {
             fullWidth
             margin="normal"
             variant="outlined"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+              },
+            }}
           />
           <TextField
             label="Password"
@@ -54,13 +95,24 @@ function Login() {
             variant="outlined"
             inputProps={{ minLength: 6 }}
             helperText={password && password.length < 6 ? 'Minimum 6 characters required' : ''}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+              },
+            }}
           />
-          <Button type="submit" variant="contained" color="primary" fullWidth style={{ marginTop: '30px', padding: '10px' }}>
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            fullWidth
+            sx={{ mt: 3, py: 1.5, fontWeight: 500 }}
+          >
             Login
           </Button>
         </form>
       </Box>
-    </Container>
+    </Box>
   );
 }
 

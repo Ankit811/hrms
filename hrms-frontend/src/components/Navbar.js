@@ -1,17 +1,17 @@
-import React, { useContext, useEffect, useRef } from 'react';
-import { Box } from '@mui/material';
+import React, { useEffect, useRef, useState, useContext } from 'react';
+import { Box, Typography, Menu, MenuItem } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import Notification from './Notification';
 import { AuthContext } from '../context/AuthContext';
 import logo from '../logo.png';
-import io from 'socket.io-client';
+import io from 'socket.io-client'
 
 function Navbar() {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const socketRef = useRef(null);
+  const [anchorEl, setAnchorEl] = useState(null);
 
-  // Navigate to default page based on user type
   const handleLogoClick = () => {
     if (!user) return;
     const defaultPaths = {
@@ -44,20 +44,96 @@ function Navbar() {
     };
   }, [user]);
 
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    logout();
+    handleMenuClose();
+    navigate('/login');
+  };
+
   return (
-    <Box className="navbar">
-      <Box className="navbar-content">
-        <img
-          src={logo}
-          alt="Company Logo"
-          className="navbar-logo"
-          onClick={handleLogoClick}
-          style={{ cursor: 'pointer' }}
-        />
-        <Box className="navbar-right">
-          <Box className="notification-bell">
-            <Notification />
-          </Box>
+    <Box
+      sx={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '64px',
+        bgcolor: 'navbar.main',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        zIndex: 1000,
+      }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          height: '100%',
+          px: 3,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <img
+            src={logo}
+            alt="Company Logo"
+            style={{
+              height: '48px',
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'scale(1.05)' },
+            }}
+            onClick={handleLogoClick}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {user ? (
+            <Typography
+              variant="body1"
+              sx={{
+                mr: 2,
+                fontWeight: 500,
+                color: '#ffffff',
+                cursor: 'pointer',
+                '&:hover': { color: 'primary.main' },
+              }}
+              onClick={handleMenuOpen}
+            >
+              {user.name || 'Guest'}
+            </Typography>
+          ) : (
+            <Typography
+              variant="body1"
+              sx={{
+                mr: 2,
+                fontWeight: 500,
+                color: '#ffffff',
+              }}
+            >
+              Guest
+            </Typography>
+          )}
+          <Notification />
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleMenuClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}>
+              Profile
+            </MenuItem>
+            <MenuItem onClick={handleLogout}>Logout</MenuItem>
+          </Menu>
         </Box>
       </Box>
     </Box>

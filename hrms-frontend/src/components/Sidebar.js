@@ -1,12 +1,14 @@
-import React, { useContext } from 'react';
-import { List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
-import { Dashboard, People, Assignment, Event, Report, ExitToApp } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import React, { useContext, useState } from 'react';
+import { List, ListItem, ListItemIcon, ListItemText, Divider, IconButton, Box } from '@mui/material';
+import { Dashboard, People, Assignment, Event, Report, ExitToApp, Menu as MenuIcon } from '@mui/icons-material';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
 function Sidebar() {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const menuItems = {
     Admin: [
@@ -21,7 +23,6 @@ function Sidebar() {
       { text: 'Dashboard', icon: <Dashboard />, path: '/ceo/dashboard' },
       { text: 'Approve Leaves', icon: <Assignment />, path: '/ceo/approve-leaves' },
       { text: 'Employees', icon: <People />, path: '/ceo/admin-employees' },
-      { text: 'Reports', icon: <Report />, path: '/ceo/reports' },
     ],
     HOD: [
       { text: 'Dashboard', icon: <Dashboard />, path: '/hod/dashboard' },
@@ -39,24 +40,83 @@ function Sidebar() {
     navigate(path);
   };
 
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   return (
-    <div className="sidebar">
+    <Box
+      sx={{
+        width: isCollapsed ? '64px' : '240px',
+        bgcolor: 'background.paper',
+        color: 'text.primary',
+        position: 'fixed',
+        top: '64px',
+        height: 'calc(100vh - 64px)',
+        p: isCollapsed ? 1 : 2,
+        boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+        transition: 'width 0.3s',
+      }}
+    >
+      <Box sx={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-end', mb: 2 }}>
+        <IconButton onClick={toggleSidebar}>
+          <MenuIcon sx={{ color: 'text.primary' }} />
+        </IconButton>
+      </Box>
       <List>
-        {user && menuItems[user.loginType]?.map((item, index) => (
-          <ListItem button key={index} onClick={() => handleNavigation(item.path)} className="sidebar-item">
-            <ListItemIcon className="sidebar-icon">{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} className="sidebar-text" />
-          </ListItem>
-        ))}
+        {user &&
+          menuItems[user.loginType]?.map((item, index) => (
+            <ListItem
+              button
+              key={index}
+              onClick={() => handleNavigation(item.path)}
+              sx={{
+                borderRadius: '8px',
+                mb: 1,
+                bgcolor: location.pathname === item.path ? 'primary.main' : 'transparent',
+                color: location.pathname === item.path ? 'white' : 'text.primary',
+                '&:hover': {
+                  bgcolor: location.pathname === item.path ? 'primary.dark' : 'action.hover',
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'text.primary', minWidth: '40px' }}>
+                {item.icon}
+              </ListItemIcon>
+              {!isCollapsed && (
+                <ListItemText
+                  primary={item.text}
+                  primaryTypographyProps={{ fontWeight: 500, fontSize: '14px' }}
+                />
+              )}
+            </ListItem>
+          ))}
       </List>
-      <Divider className="sidebar-divider" />
+      <Divider sx={{ bgcolor: 'divider', my: 2 }} />
       <List>
-        <ListItem button onClick={logout} className="sidebar-item">
-          <ListItemIcon className="sidebar-icon"><ExitToApp /></ListItemIcon>
-          <ListItemText primary="Logout" className="sidebar-text" />
+        <ListItem
+          button
+          onClick={() => {
+            logout();
+            navigate('/login');
+          }}
+          sx={{
+            borderRadius: '8px',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          <ListItemIcon sx={{ color: 'text.primary', minWidth: '40px' }}>
+            <ExitToApp />
+          </ListItemIcon>
+          {!isCollapsed && (
+            <ListItemText
+              primary="Logout"
+              primaryTypographyProps={{ fontWeight: 500, fontSize: '14px' }}
+            />
+          )}
         </ListItem>
       </List>
-    </div>
+    </Box>
   );
 }
 

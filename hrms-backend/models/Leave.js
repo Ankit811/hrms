@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const leaveSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
+  employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   name: { type: String, required: true },
   position: { type: String, required: true },
   department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },

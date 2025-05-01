@@ -52,6 +52,18 @@ router.get('/', auth, role(['Admin', 'CEO']), async (req, res) => {
   }
 });
 
+// Get employees in HOD's department
+router.get('/department', auth, role(['HOD']), async (req, res) => {
+  try {
+    const { employeeId } = req.user;
+    const hod = await Employee.findOne({ employeeId }).populate('department');
+    const employees = await Employee.find({ department: hod.department._id }).populate('department');
+    res.json(employees);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // Get single employee by ID
 router.get('/:id', auth, async (req, res) => {
   try {
@@ -273,6 +285,7 @@ router.patch('/:id/lock', auth, role(['Admin']), async (req, res) => {
     const employee = await Employee.findById(req.params.id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
+    // Toggle the locked status
     employee.locked = !employee.locked;
     const updatedEmployee = await employee.save();
 

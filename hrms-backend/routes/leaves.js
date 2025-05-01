@@ -10,10 +10,10 @@ const router = express.Router();
 // Submit Leave
 router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
   try {
-
     const user = await Employee.findById(req.user.id);
     const leave = new Leave({
       employeeId: user.employeeId,
+      employee: user._id,
       name: user.name,
       position: user.position,
       department: user.department,
@@ -28,12 +28,16 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
       compensatoryDetails: req.body.compensatoryDetails,
     });
 
-    if (req.body.leaveType === 'Paid' && user.paidLeaves <= 0 && !req.body.isCompensatory) {
-      return res.status(400).json({ message: 'No paid leaves available' });
-    }
+    const leaveDays = req.body.halfDay ? 0.5 :
+    (req.body.fullDay?.to
+    ? ((new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
+    : 1);
 
+    if (req.body.leaveType === 'Paid' && user.paidLeaves < leaveDays && !req.body.isCompensatory) {
+      return res.status(400).json({ message: 'Not enough paid leave balance' });
+    }
     await leave.save();
-    
+
     if (req.body.leaveType === 'Paid' && !req.body.isCompensatory) {
       user.paidLeaves -= req.body.halfDay ? 0.5 : (req.body.fullDay.to ? (new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24) + 1 : 1);
     } else if (req.body.leaveType === 'Unpaid') {
@@ -44,8 +48,8 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
 
     const hod = await Employee.findOne({ department: user.department, loginType: 'HOD' });
     const admin = await Employee.findOne({ loginType: 'Admin' });
-    console.log(hod,admin);
-    
+    console.log(hod, admin);
+
     if (hod && user.loginType !== 'HOD') {
       await Notification.create({ userId: hod.employeeId, message: `New leave request from ${user.name}` });
       if (global._io) global._io.to(hod.employeeId).emit('notification', { message: `New leave request from ${user.name}` });
@@ -67,21 +71,26 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
-    if (req.user.loginType === 'Employee' || req.user.loginType === 'HOD') {
+
+    if (req.user.loginType === 'Employee') {
       filter = { employeeId: req.user.employeeId };
+    } else if (req.user.loginType === 'HOD') {
+      const hod = await Employee.findOne({ employeeId: req.user.employeeId }).populate('department');
+      if (!hod || !hod.department || !hod.department._id) {
+        return res.status(400).json({ message: 'HOD has no valid department assigned' });
+      }
+      filter = { department: hod.department._id, 'status.hod': 'Pending' };
     } else if (req.user.loginType === 'Admin') {
       filter = { 'status.hod': 'Approved', 'status.admin': 'Pending' };
     } else if (req.user.loginType === 'CEO') {
       filter = { 'status.admin': 'Approved', 'status.ceo': 'Pending' };
-    } else if (req.user.loginType === 'HOD') {
-      const user = await Employee.findById(req.user.id);
-      filter = { department: user.department, 'status.hod': 'Pending' };
     }
 
-    const leaves = await Leave.find(filter).populate('department');
+    const leaves = await Leave.find(filter).populate('department employee');
     res.json(leaves);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error fetching leaves:', err.stack);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -93,39 +102,59 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
 
     const user = await Employee.findOne({ employeeId: leave.employeeId });
 
+    let nextStage = '';
+    let approverMessage = '';
+
+    // Logic for HOD approval
     if (req.user.loginType === 'HOD' && leave.status.hod === 'Pending') {
       leave.status.hod = req.body.status;
       if (req.body.status === 'Approved') {
-        const admin = await Employee.findOne({ loginType: 'Admin' });
-        await Notification.create({ userId: admin.employeeId, message: `Leave request from ${leave.name} approved by HOD` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `Leave approved by HOD for ${leave.name}` });
+        nextStage = 'admin';
+        approverMessage = `Leave request from ${leave.name} approved by HOD`;
       } else {
-        await Notification.create({ userId: user.employeeId, message: `Your leave request was rejected by HOD` });
-        if (global._io) global._io.to(user.employeeId).emit('notification', { message: `Leave rejected by HOD` });
+        approverMessage = `Your leave request was rejected by HOD`;
       }
 
+    // Logic for Admin approval
     } else if (req.user.loginType === 'Admin' && leave.status.admin === 'Pending') {
       leave.status.admin = req.body.status;
       if (req.body.status === 'Approved') {
-        const ceo = await Employee.findOne({ loginType: 'CEO' });
-        await Notification.create({ userId: ceo.employeeId, message: `Leave request from ${leave.name} approved by Admin` });
-        if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `Leave approved by Admin for ${leave.name}` });
+        nextStage = 'ceo';
+        approverMessage = `Leave request from ${leave.name} approved by Admin`;
       } else {
-        await Notification.create({ userId: user.employeeId, message: `Your leave request was rejected by Admin` });
-        if (global._io) global._io.to(user.employeeId).emit('notification', { message: `Leave rejected by Admin` });
+        approverMessage = `Your leave request was rejected by Admin`;
       }
 
+    // Logic for CEO approval
     } else if (req.user.loginType === 'CEO' && leave.status.ceo === 'Pending') {
       leave.status.ceo = req.body.status;
-      await Notification.create({ userId: user.employeeId, message: `Your leave request was ${req.body.status.toLowerCase()} by CEO` });
-      if (global._io) global._io.to(user.employeeId).emit('notification', { message: `Leave ${req.body.status.toLowerCase()} by CEO` });
+      approverMessage = `Your leave request was ${req.body.status.toLowerCase()} by CEO`;
 
     } else {
       return res.status(403).json({ message: 'Not authorized to approve this leave' });
     }
 
     await leave.save();
-    await Audit.create({ userId: req.user.employeeId, action: `${req.body.status} Leave`, details: `${req.body.status} leave for ${leave.name}` });
+
+    // Send notifications to the employee and next approver if available
+    await Notification.create({ userId: user.employeeId, message: approverMessage });
+    if (global._io) global._io.to(user.employeeId).emit('notification', { message: approverMessage });
+
+    if (nextStage) {
+      let nextApprover = null;
+      if (nextStage === 'admin') {
+        nextApprover = await Employee.findOne({ loginType: 'Admin' });
+      } else if (nextStage === 'ceo') {
+        nextApprover = await Employee.findOne({ loginType: 'CEO' });
+      }
+      if (nextApprover) {
+        await Notification.create({ userId: nextApprover.employeeId, message: `New leave request from ${leave.name}` });
+        if (global._io) global._io.to(nextApprover.employeeId).emit('notification', { message: `New leave request from ${leave.name}` });
+      }
+    }
+
+    // Log the action in audit
+    await Audit.create({ user: req.user.employeeId, action: `${req.body.status} Leave`, details: `${req.body.status} leave for ${leave.name}` });
 
     res.json(leave);
   } catch (err) {

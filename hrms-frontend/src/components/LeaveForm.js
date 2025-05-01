@@ -1,13 +1,13 @@
 import React, { useState, useContext } from 'react';
 import {
   TextField, FormControl, InputLabel, Select, MenuItem,
-  Button, Box, Grid, Checkbox, FormControlLabel
+  Button, Box, Grid, Checkbox, FormControlLabel, Typography
 } from '@mui/material';
-import { AuthContext } from '../context/AuthContext'; // Import AuthContext
+import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 
 function LeaveForm() {
-  const { user } = useContext(AuthContext); // Get user data from AuthContext
+  const { user } = useContext(AuthContext);
   const [form, setForm] = useState({
     leaveType: '',
     category: '',
@@ -49,13 +49,11 @@ function LeaveForm() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Add user to the form data
       const leaveData = {
         ...form,
-        user: user.id, // Pass the user ID from AuthContext
+        user: user.id,
       };
       await api.post('/leaves', leaveData);
-      console.log("fuck you")
       alert('Leave submitted successfully');
       setForm({
         leaveType: '',
@@ -78,11 +76,13 @@ function LeaveForm() {
   };
 
   return (
-    <Box p={3}>
+    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: '600px', width: '100%', mx: 'auto', bgcolor: 'background.paper', borderRadius: '12px', boxShadow: 3 }}>
+      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, textAlign: 'center', color: 'text.primary' }}>
+        Apply for Leave
+      </Typography>
       <form onSubmit={handleSubmit}>
-        <Grid container spacing={2}>
-
-          <Grid item xs={6}>
+        <Grid container spacing={3}>
+          <Grid item xs={12} sm={6}>
             <FormControl fullWidth required>
               <InputLabel>Leave Type</InputLabel>
               <Select name="leaveType" value={form.leaveType} onChange={handleChange}>
@@ -92,7 +92,7 @@ function LeaveForm() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={6}>
+          <Grid item xs={12} sm={6}>
             <FormControl fullWidth required>
               <InputLabel>Category</InputLabel>
               <Select name="category" value={form.category} onChange={handleChange}>
@@ -107,22 +107,27 @@ function LeaveForm() {
             <FormControlLabel
               control={<Checkbox checked={form.isCompensatory} onChange={handleCheckboxChange} />}
               label="Compensatory Leave"
+              sx={{ color: 'text.primary' }}
             />
           </Grid>
 
           {form.isCompensatory && (
             <Grid item xs={12}>
               <TextField
-                fullWidth required
+                fullWidth
+                required
                 label="Compensatory Details"
                 name="compensatoryDetails"
                 value={form.compensatoryDetails}
                 onChange={handleChange}
+                multiline
+                rows={2}
+                sx={{ bgcolor: 'background.default' }}
               />
             </Grid>
           )}
 
-          <Grid item xs={6}>
+          <Grid item xs={12} sm={6}>
             <FormControl fullWidth required>
               <InputLabel>Leave Duration</InputLabel>
               <Select
@@ -146,7 +151,7 @@ function LeaveForm() {
 
           {form.duration === 'half' ? (
             <>
-              <Grid item xs={6}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Session</InputLabel>
                   <Select
@@ -159,7 +164,7 @@ function LeaveForm() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="Half Day Date"
                   name="halfDay.date"
@@ -169,12 +174,13 @@ function LeaveForm() {
                   value={form.halfDay.date}
                   onChange={handleChange}
                   InputLabelProps={{ shrink: true }}
+                  sx={{ bgcolor: 'background.default' }}
                 />
               </Grid>
             </>
           ) : (
             <>
-              <Grid item xs={6}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="From Date"
                   name="fullDay.from"
@@ -184,9 +190,10 @@ function LeaveForm() {
                   value={form.fullDay.from}
                   onChange={handleChange}
                   InputLabelProps={{ shrink: true }}
+                  sx={{ bgcolor: 'background.default' }}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="To Date"
                   name="fullDay.to"
@@ -196,6 +203,7 @@ function LeaveForm() {
                   value={form.fullDay.to}
                   onChange={handleChange}
                   InputLabelProps={{ shrink: true }}
+                  sx={{ bgcolor: 'background.default' }}
                 />
               </Grid>
             </>
@@ -203,40 +211,54 @@ function LeaveForm() {
 
           <Grid item xs={12}>
             <TextField
-              fullWidth required
+              fullWidth
+              required
               label="Reason"
               name="reason"
               value={form.reason}
               onChange={handleChange}
+              multiline
+              rows={3}
+              sx={{ bgcolor: 'background.default' }}
             />
           </Grid>
 
-          <Grid item xs={6}>
+          <Grid item xs={12} sm={6}>
             <TextField
-              fullWidth required
+              fullWidth
+              required
               label="Charge Given To"
               name="chargeGivenTo"
               value={form.chargeGivenTo}
               onChange={handleChange}
+              sx={{ bgcolor: 'background.default' }}
             />
           </Grid>
 
-          <Grid item xs={6}>
+          <Grid item xs={12} sm={6}>
             <TextField
-              fullWidth required
+              fullWidth
+              required
               label="Emergency Contact"
               name="emergencyContact"
               value={form.emergencyContact}
               onChange={handleChange}
+              sx={{ bgcolor: 'background.default' }}
             />
           </Grid>
 
           <Grid item xs={12}>
-            <Button type="submit" variant="contained" color="primary" disabled={submitting}>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={submitting}
+              fullWidth
+              sx={{ py: 1.5, mt: 2 }}
+            >
               Submit Leave
             </Button>
           </Grid>
-
         </Grid>
       </form>
     </Box>

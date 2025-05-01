@@ -43,10 +43,10 @@ function EmployeeList() {
 
   const handleLockUnlock = async (id, locked) => {
     try {
-      await api.patch(`/employees/${id}/lock`, { locked: !locked });
-      setEmployees(employees.map(emp => emp._id === id ? { ...emp, locked: !locked } : emp));
-      fetchEmployees(); // Refresh to ensure consistency
-      alert(`Employee ${locked ? 'unlocked' : 'locked'} successfully`);
+      const response = await api.patch(`/employees/${id}/lock`);
+      const updatedEmployee = response.data; // Assuming response.data contains the updated employee
+      setEmployees(employees.map(emp => emp._id === id ? { ...emp, locked: updatedEmployee.locked } : emp));
+      alert(`Employee ${updatedEmployee.locked ? 'locked' : 'unlocked'} successfully`);
     } catch (error) {
       console.error('Error locking/unlocking employee:', error);
       alert('Failed to lock/unlock employee: ' + (error.response?.data?.message || error.message));

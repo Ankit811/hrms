@@ -5,7 +5,6 @@ import Navbar from '../components/Navbar';
 import Dashboard from '../components/Dashboard';
 import LeaveList from '../components/LeaveList';
 import EmployeeList from '../components/EmployeeList';
-import Report from '../components/Report';
 
 function CEO() {
   return (
@@ -17,7 +16,6 @@ function CEO() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="approve-leaves" element={<LeaveList />} />
           <Route path="admin-employees" element={<EmployeeList />} />
-          <Route path="reports" element={<Report />} />
         </Routes>
       </div>
     </div>

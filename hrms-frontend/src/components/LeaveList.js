@@ -1,20 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import {
-  Paper, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Typography, TextField, FormControl, InputLabel,
-  Select, MenuItem, Grid
+  Card, CardContent, Table, TableBody, TableCell,
+  TableHead, TableRow, TextField, FormControl,
+  InputLabel, Select, MenuItem, Grid, Button
 } from '@mui/material';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
+import { AuthContext } from '../context/AuthContext';
 
 function LeaveList() {
+  const { user } = useContext(AuthContext);
   const [leaves, setLeaves] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [filters, setFilters] = useState({
     leaveType: '',
     status: '',
     fromDate: '',
-    toDate: ''
+    toDate: '',
   });
 
   useEffect(() => {
@@ -52,99 +54,226 @@ function LeaveList() {
 
     if (filterSet.fromDate) {
       const from = new Date(filterSet.fromDate);
-      data = data.filter(leave => new Date(leave.createdAt) >= from);
+      data = data.filter(leave => {
+        const leaveFrom = new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt);
+        return leaveFrom >= from;
+      });
     }
 
     if (filterSet.toDate) {
       const to = new Date(filterSet.toDate);
-      data = data.filter(leave => new Date(leave.createdAt) <= to);
+      data = data.filter(leave => {
+        const leaveTo = new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt);
+        return leaveTo <= to;
+      });
     }
 
     setFiltered(data);
   };
 
+  const handleApproval = async (id, status, currentStage) => {
+    try {
+      let nextStage = '';
+      if (currentStage === 'hod') nextStage = 'admin';
+      else if (currentStage === 'admin') nextStage = 'ceo';
+
+      const leaveData = { status, nextStage };
+      await api.put(`/leaves/${id}/approve`, leaveData);
+      setLeaves(prev => prev.map(l => l._id === id ? { ...l, status: { ...l.status, [currentStage]: status, [nextStage]: 'Pending' } } : l));
+      setFiltered(prev => prev.map(l => l._id === id ? { ...l, status: { ...l.status, [currentStage]: status, [nextStage]: 'Pending' } } : l));
+      alert(`Leave ${status.toLowerCase()} successfully.`);
+    } catch (err) {
+      console.error('Approval error:', err);
+      alert('Error processing leave approval.');
+    }
+  };
+
   return (
     <ContentLayout title="Leave List">
-      <Grid container spacing={2} style={{ marginBottom: '1rem' }}>
-        <Grid item xs={3}>
-          <FormControl fullWidth>
-            <InputLabel>Leave Type</InputLabel>
-            <Select name="leaveType" value={filters.leaveType} onChange={handleFilterChange}>
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="Paid">Paid</MenuItem>
-              <MenuItem value="Unpaid">Unpaid</MenuItem>
-              <MenuItem value="Compensatory">Compensatory</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={3}>
-          <FormControl fullWidth>
-            <InputLabel>Status</InputLabel>
-            <Select name="status" value={filters.status} onChange={handleFilterChange}>
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="Pending">Pending</MenuItem>
-              <MenuItem value="Approved">Approved</MenuItem>
-              <MenuItem value="Rejected">Rejected</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={3}>
-          <TextField
-            name="fromDate"
-            label="From Date"
-            type="date"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-            value={filters.fromDate}
-            onChange={handleFilterChange}
-          />
-        </Grid>
-        <Grid item xs={3}>
-          <TextField
-            name="toDate"
-            label="To Date"
-            type="date"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-            value={filters.toDate}
-            onChange={handleFilterChange}
-          />
-        </Grid>
-      </Grid>
+      <Card sx={{ boxShadow: 3, borderRadius: '12px', p: { xs: 2, md: 3 }, bgcolor: 'background.paper' }}>
+        <CardContent>
+          <Grid container spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }}>
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth variant="outlined">
+                <InputLabel>Leave Type</InputLabel>
+                <Select
+                  name="leaveType"
+                  value={filters.leaveType}
+                  onChange={handleFilterChange}
+                  label="Leave Type"
+                  sx={{ bgcolor: 'background.default' }}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="Paid">Paid</MenuItem>
+                  <MenuItem value="Unpaid">Unpaid</MenuItem>
+                  <MenuItem value="Compensatory">Compensatory</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth variant="outlined">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  name="status"
+                  value={filters.status}
+                  onChange={handleFilterChange}
+                  label="Status"
+                  sx={{ bgcolor: 'background.default' }}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="Approved">Approved</MenuItem>
+                  <MenuItem value="Rejected">Rejected</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField
+                name="fromDate"
+                label="From Date"
+                type="date"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                value={filters.fromDate}
+                onChange={handleFilterChange}
+                variant="outlined"
+                sx={{ bgcolor: 'background.default' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField
+                name="toDate"
+                label="To Date"
+                type="date"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                value={filters.toDate}
+                onChange={handleFilterChange}
+                variant="outlined"
+                sx={{ bgcolor: 'background.default' }}
+              />
+            </Grid>
+          </Grid>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Employee</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>From</TableCell>
-              <TableCell>To</TableCell>
-              <TableCell>Status (HOD)</TableCell>
-              <TableCell>Status (Admin)</TableCell>
-              <TableCell>Status (CEO)</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filtered.map((leave, index) => (
-              <TableRow key={index}>
-                <TableCell>{leave.name}</TableCell>
-                <TableCell>{leave.leaveType}</TableCell>
-                <TableCell>{leave.fullDay?.from?.split('T')[0]}</TableCell>
-                <TableCell>{leave.fullDay?.to?.split('T')[0]}</TableCell>
-                <TableCell>{leave.status.hod}</TableCell>
-                <TableCell>{leave.status.admin}</TableCell>
-                <TableCell>{leave.status.ceo}</TableCell>
+          <Table sx={{ minWidth: 650, bgcolor: 'background.paper' }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>Employee</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>Type</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>From</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>To</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>Status (HOD)</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>Status (Admin)</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>Status (CEO)</TableCell>
+                {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
+                  <TableCell sx={{ fontWeight: 700, color: 'text.primary' }}>Action</TableCell>
+                )}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      {filtered.length === 0 && (
-        <Typography variant="body2" align="center" style={{ marginTop: 16 }}>
-          No leave records found.
-        </Typography>
-      )}
+            </TableHead>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 8 : 7} sx={{ textAlign: 'center', color: 'text.secondary', py: 4 }}>
+                    No leave records found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((leave) => (
+                  <TableRow key={leave._id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                    <TableCell sx={{ color: 'text.primary' }}>{leave.name}</TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>{leave.leaveType}</TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>
+                      {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>
+                      {new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>{leave.status.hod || 'Pending'}</TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>{leave.status.admin || 'Pending'}</TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>{leave.status.ceo || 'Pending'}</TableCell>
+                    {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
+                      <TableCell>
+                        {user.loginType === 'HOD' && leave.status.hod === 'Pending' && (
+                          <>
+                            <Button
+                              variant="contained"
+                              color="success"
+                              size="small"
+                              sx={{ mr: 1, mb: 1 }}
+                              onClick={() => handleApproval(leave._id, 'Approved', 'hod')}
+                              disabled={leave.status.hod !== 'Pending'}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              variant="contained"
+                              color="error"
+                              size="small"
+                              sx={{ mb: 1 }}
+                              onClick={() => handleApproval(leave._id, 'Rejected', 'hod')}
+                              disabled={leave.status.hod !== 'Pending'}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {user.loginType === 'Admin' && leave.status.hod === 'Approved' && leave.status.admin === 'Pending' && (
+                          <>
+                            <Button
+                              variant="contained"
+                              color="success"
+                              size="small"
+                              sx={{ mr: 1, mb: 1 }}
+                              onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
+                              disabled={leave.status.admin !== 'Pending'}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              variant="contained"
+                              color="error"
+                              size="small"
+                              sx={{ mb: 1 }}
+                              onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
+                              disabled={leave.status.admin !== 'Pending'}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {user.loginType === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending' && (
+                          <>
+                            <Button
+                              variant="contained"
+                              color="success"
+                              size="small"
+                              sx={{ mr: 1, mb: 1 }}
+                              onClick={() => handleApproval(leave._id, 'Approved', 'ceo')}
+                              disabled={leave.status.ceo !== 'Pending'}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              variant="contained"
+                              color="error"
+                              size="small"
+                              sx={{ mb: 1 }}
+                              onClick={() => handleApproval(leave._id, 'Rejected', 'ceo')}
+                              disabled={leave.status.ceo !== 'Pending'}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </ContentLayout>
   );
 }
