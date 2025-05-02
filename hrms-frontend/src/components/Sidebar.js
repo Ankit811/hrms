@@ -1,8 +1,10 @@
 import React, { useContext, useState } from 'react';
-import { List, ListItem, ListItemIcon, ListItemText, Divider, IconButton, Box } from '@mui/material';
-import { Dashboard, People, Assignment, Event, Report, ExitToApp, Menu as MenuIcon } from '@mui/icons-material';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Button } from '../components/ui/button';
+import { LayoutDashboard, Users, FileText, Calendar, BarChart, LogOut, Menu } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { cn } from './lib/utils';
 
 function Sidebar() {
   const { user, logout } = useContext(AuthContext);
@@ -12,27 +14,27 @@ function Sidebar() {
 
   const menuItems = {
     Admin: [
-      { text: 'Dashboard', icon: <Dashboard />, path: '/admin/dashboard' },
-      { text: 'Employees', icon: <People />, path: '/admin/employees' },
-      { text: 'Add Employee', icon: <Assignment />, path: '/admin/add-employee' },
-      { text: 'Attendance', icon: <Event />, path: '/admin/attendance' },
-      { text: 'Approve Leave', icon: <Assignment />, path: '/admin/approve-leave' },
-      { text: 'Reports', icon: <Report />, path: '/admin/reports' },
+      { text: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, path: '/admin/dashboard' },
+      { text: 'Employees', icon: <Users className="h-5 w-5" />, path: '/admin/employees' },
+      { text: 'Add Employee', icon: <FileText className="h-5 w-5" />, path: '/admin/add-employee' },
+      { text: 'Attendance', icon: <Calendar className="h-5 w-5" />, path: '/admin/attendance' },
+      { text: 'Approve Leave', icon: <FileText className="h-5 w-5" />, path: '/admin/approve-leave' },
+      { text: 'Reports', icon: <BarChart className="h-5 w-5" />, path: '/admin/reports' },
     ],
     CEO: [
-      { text: 'Dashboard', icon: <Dashboard />, path: '/ceo/dashboard' },
-      { text: 'Approve Leaves', icon: <Assignment />, path: '/ceo/approve-leaves' },
-      { text: 'Employees', icon: <People />, path: '/ceo/admin-employees' },
+      { text: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, path: '/ceo/dashboard' },
+      { text: 'Approve Leaves', icon: <FileText className="h-5 w-5" />, path: '/ceo/approve-leaves' },
+      { text: 'Employees', icon: <Users className="h-5 w-5" />, path: '/ceo/admin-employees' },
     ],
     HOD: [
-      { text: 'Dashboard', icon: <Dashboard />, path: '/hod/dashboard' },
-      { text: 'Profile', icon: <People />, path: '/hod/profile' },
-      { text: 'Apply Leave', icon: <Assignment />, path: '/hod/leave' },
-      { text: 'Approve Leave', icon: <Assignment />, path: '/hod/approve-leave' },
+      { text: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, path: '/hod/dashboard' },
+      { text: 'Profile', icon: <Users className="h-5 w-5" />, path: '/hod/profile' },
+      { text: 'Apply Leave', icon: <FileText className="h-5 w-5" />, path: '/hod/leave' },
+      { text: 'Approve Leave', icon: <FileText className="h-5 w-5" />, path: '/hod/approve-leave' },
     ],
     Employee: [
-      { text: 'Profile', icon: <People />, path: '/employee/profile' },
-      { text: 'Apply Leave', icon: <Assignment />, path: '/employee/leave' },
+      { text: 'Profile', icon: <Users className="h-5 w-5" />, path: '/employee/profile' },
+      { text: 'Apply Leave', icon: <FileText className="h-5 w-5" />, path: '/employee/leave' },
     ],
   };
 
@@ -45,78 +47,71 @@ function Sidebar() {
   };
 
   return (
-    <Box
-      sx={{
-        width: isCollapsed ? '64px' : '240px',
-        bgcolor: 'background.paper',
-        color: 'text.primary',
-        position: 'fixed',
-        top: '64px',
-        height: 'calc(100vh - 64px)',
-        p: isCollapsed ? 1 : 2,
-        boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
-        transition: 'width 0.3s',
-      }}
+    <motion.aside
+      initial={{ width: isCollapsed ? 64 : 240 }}
+      animate={{ width: isCollapsed ? 64 : 240 }}
+      transition={{ type: 'spring', stiffness: 100 }}
+      className="fixed top-16 left-0 h-[calc(100vh-64px)] bg-white shadow-lg z-40"
     >
-      <Box sx={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-end', mb: 2 }}>
-        <IconButton onClick={toggleSidebar}>
-          <MenuIcon sx={{ color: 'text.primary' }} />
-        </IconButton>
-      </Box>
-      <List>
+      <div className="flex justify-center md:justify-end p-4">
+        <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+          <Menu className="h-6 w-6 text-gray-700" />
+        </Button>
+      </div>
+      <nav className="px-2">
         {user &&
           menuItems[user.loginType]?.map((item, index) => (
-            <ListItem
-              button
+            <motion.div
               key={index}
-              onClick={() => handleNavigation(item.path)}
-              sx={{
-                borderRadius: '8px',
-                mb: 1,
-                bgcolor: location.pathname === item.path ? 'primary.main' : 'transparent',
-                color: location.pathname === item.path ? 'white' : 'text.primary',
-                '&:hover': {
-                  bgcolor: location.pathname === item.path ? 'primary.dark' : 'action.hover',
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: location.pathname === item.path ? 'white' : 'text.primary', minWidth: '40px' }}>
-                {item.icon}
-              </ListItemIcon>
-              {!isCollapsed && (
-                <ListItemText
-                  primary={item.text}
-                  primaryTypographyProps={{ fontWeight: 500, fontSize: '14px' }}
-                />
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={cn(
+                'flex items-center p-2 rounded-lg mb-1 cursor-pointer',
+                location.pathname === item.path ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
               )}
-            </ListItem>
+              onClick={() => handleNavigation(item.path)}
+            >
+              <span className="mr-3">{item.icon}</span>
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.span
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: 'auto' }}
+                    exit={{ opacity: 0, width: 0 }}
+                    className="text-sm font-medium"
+                  >
+                    {item.text}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.div>
           ))}
-      </List>
-      <Divider sx={{ bgcolor: 'divider', my: 2 }} />
-      <List>
-        <ListItem
-          button
+        <div className="my-4 border-t border-gray-200" />
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="flex items-center p-2 rounded-lg cursor-pointer text-gray-700 hover:bg-gray-100"
           onClick={() => {
             logout();
             navigate('/login');
           }}
-          sx={{
-            borderRadius: '8px',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
         >
-          <ListItemIcon sx={{ color: 'text.primary', minWidth: '40px' }}>
-            <ExitToApp />
-          </ListItemIcon>
-          {!isCollapsed && (
-            <ListItemText
-              primary="Logout"
-              primaryTypographyProps={{ fontWeight: 500, fontSize: '14px' }}
-            />
-          )}
-        </ListItem>
-      </List>
-    </Box>
+          <LogOut className="h-5 w-5 mr-3" />
+          <AnimatePresence>
+            {!isCollapsed && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                className="text-sm font-medium"
+              >
+                Logout
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </nav>
+    </motion.aside>
   );
 }
 

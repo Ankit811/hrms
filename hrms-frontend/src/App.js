@@ -15,8 +15,9 @@ function App() {
   return (
     <Router>
       <Routes>
+        
         <Route path="/login" element={<Login />} />
-        <Route
+         <Route
           path="/admin/*"
           element={user && user.loginType === 'Admin' ? <Admin /> : <Navigate to="/login" />}
         />
@@ -33,7 +34,7 @@ function App() {
           element={user && user.loginType === 'Employee' ? <Employee /> : <Navigate to="/login" />}
         />
         <Route path="/" element={<Navigate to="/login" />} />
-      </Routes>
+      </Routes> 
     </Router>
   );
 }

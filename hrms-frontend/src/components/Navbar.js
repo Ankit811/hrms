@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, useState, useContext } from 'react';
-import { Box, Typography, Menu, MenuItem } from '@mui/material';
+import React, { useEffect, useRef, useContext } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import Notification from './Notification';
 import { AuthContext } from '../context/AuthContext';
 import logo from '../logo.png';
-import io from 'socket.io-client'
+import io from 'socket.io-client';
 
 function Navbar() {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const socketRef = useRef(null);
-  const [anchorEl, setAnchorEl] = useState(null);
 
   const handleLogoClick = () => {
     if (!user) return;
@@ -44,99 +44,56 @@ function Navbar() {
     };
   }, [user]);
 
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
   const handleLogout = () => {
     logout();
-    handleMenuClose();
     navigate('/login');
   };
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '64px',
-        bgcolor: 'navbar.main',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        zIndex: 1000,
-      }}
+    <motion.header
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ type: 'spring', stiffness: 120 }}
+      className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg z-50"
     >
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          height: '100%',
-          px: 3,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <img
-            src={logo}
-            alt="Company Logo"
-            style={{
-              height: '48px',
-              cursor: 'pointer',
-              backgroundColor: 'transparent',
-              transition: 'transform 0.2s',
-              '&:hover': { transform: 'scale(1.05)' },
-            }}
-            onClick={handleLogoClick}
-          />
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      <div className="flex items-center justify-between h-full px-4 md:px-6">
+        <motion.img
+          src={logo}
+          alt="Company Logo"
+          className="h-12 cursor-pointer"
+          whileHover={{ scale: 1.05 }}
+          onClick={handleLogoClick}
+        />
+        <div className="flex items-center space-x-4">
           {user ? (
-            <Typography
-              variant="body1"
-              sx={{
-                mr: 2,
-                fontWeight: 500,
-                color: '#ffffff',
-                cursor: 'pointer',
-                '&:hover': { color: 'primary.main' },
-              }}
-              onClick={handleMenuOpen}
-            >
-              {user.name || 'Guest'}
-            </Typography>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <motion.div
+                  whileHover={{ scale: 1.1 }}
+                  className="text-white font-medium cursor-pointer"
+                >
+                  {user.name || 'Guest'}
+                </motion.div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-white rounded-lg shadow-xl">
+                <DropdownMenuItem
+                  className="hover:bg-blue-100"
+                  onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}
+                >
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-blue-100" onClick={handleLogout}>
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
-            <Typography
-              variant="body1"
-              sx={{
-                mr: 2,
-                fontWeight: 500,
-                color: '#ffffff',
-              }}
-            >
-              Guest
-            </Typography>
+            <span className="text-white font-medium">Guest</span>
           )}
           <Notification />
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          >
-            <MenuItem onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}>
-              Profile
-            </MenuItem>
-            <MenuItem onClick={handleLogout}>Logout</MenuItem>
-          </Menu>
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </div>
+    </motion.header>
   );
 }
 

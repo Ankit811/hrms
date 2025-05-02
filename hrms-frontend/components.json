@@ -1,0 +1,22 @@
+{
+    "$schema": "https://ui.shadcn.com/schema.json",
+    "style": "new-york",
+    "rsc": false,
+    "tsx": true,
+    "tailwind": {
+      "config": "",
+      "css": "src/styles/globals.css",
+      "baseColor": "neutral",
+      "cssVariables": true,
+      "prefix": ""
+    },
+    "aliases": {
+      "components": "/components",
+      "utils": "hrms-frontend/src/components/lib/utils",
+      "ui": "hrms-frontend/src/components/ui",
+      "lib": "hrms-frontend/src/components/lib",
+      "hooks": "@/hooks"
+    },
+    "iconLibrary": "lucide"
+  }
+  

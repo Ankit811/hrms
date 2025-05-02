@@ -1,7 +1,11 @@
 import React, { useState, useContext } from 'react';
-import { TextField, Button, Typography, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
+import { Label } from '../components/ui/label';
+//import { cn } from '../components/lib/utils';
 import logo from '../logo.png';
 
 function Login() {
@@ -18,7 +22,6 @@ function Login() {
         alert('Login failed: Invalid user type');
         return;
       }
-
       const userType = loggedInUser.loginType.toLowerCase();
       if (userType === 'employee') {
         navigate(`/${userType}/profile`);
@@ -31,88 +34,49 @@ function Login() {
   };
 
   return (
-    <Box
-      sx={{
-        height: '100vh',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        bgcolor: 'background.default',
-        background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
-        p: 2,
-      }}
-    >
-      <Box
-        sx={{
-          bgcolor: 'background.paper',
-          p: 4,
-          borderRadius: '12px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-          width: '100%',
-          maxWidth: '400px',
-          textAlign: 'center',
-          animation: 'fadeIn 0.5s ease-in-out',
-          '@keyframes fadeIn': {
-            from: { opacity: 0, transform: 'translateY(20px)' },
-            to: { opacity: 1, transform: 'translateY(0)' },
-          },
-        }}
-      >
-        <img
-          src={logo}
-          alt="Company Logo"
-          style={{
-            width: '120px',
-            height: 'auto',
-            mb: 2,
-            backgroundColor: 'transparent',
-          }}
-        />
-        <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, color: 'text.primary' }}>
-          HR Management System
-        </Typography>
-        <form onSubmit={handleSubmit}>
-          <TextField
-            label="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            fullWidth
-            margin="normal"
-            variant="outlined"
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-              },
-            }}
-          />
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            fullWidth
-            margin="normal"
-            variant="outlined"
-            inputProps={{ minLength: 6 }}
-            helperText={password && password.length < 6 ? 'Minimum 6 characters required' : ''}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-              },
-            }}
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            fullWidth
-            sx={{ mt: 3, py: 1.5, fontWeight: 500 }}
-          >
-            Login
-          </Button>
-        </form>
-      </Box>
-    </Box>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-blue-600 to-blue-400 p-4">
+      <Card className="w-full max-w-md shadow-xl animate-in fade-in zoom-in-95 duration-500">
+        <CardHeader className="flex flex-col items-center gap-2">
+          <img src={logo} alt="Company Logo" className="w-24 h-auto mb-2" />
+          <CardTitle className="text-center text-2xl font-bold text-gray-800">
+            HR Management System
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+              {password && password.length < 6 && (
+                <p className="text-sm text-red-500 mt-1">Minimum 6 characters required</p>
+              )}
+            </div>
+            <Button type="submit" className="w-full font-medium">
+              Login
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
