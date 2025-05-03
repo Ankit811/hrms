@@ -6,10 +6,10 @@ const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
-// Rate limiter: Max 5 attempts per 15 minutes per IP
+// Rate limiter: Max 10 attempts per 15 minutes per IP
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests
+  max: 10, // limit each IP to 10 requests
   message: {
     message: 'Too many login attempts from this IP, please try again after 15 minutes',
   },
@@ -17,6 +17,25 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Expect "Bearer <token>"
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // Attach decoded token (contains id, loginType, employeeId)
+    next();
+  } catch (err) {
+    return res.status(403).json({ message: 'Invalid or expired token' });
+  }
+};
+
+// POST /api/auth/login - Login an employee
 router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
@@ -40,6 +59,25 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/auth/me - Get authenticated employee's details
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await Employee.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    res.json({
+      id: user._id,
+      loginType: user.loginType,
+      name: user.name,
+      employeeId: user.employeeId,
+    });
+  } catch (err) {
+    console.error('Error fetching user:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

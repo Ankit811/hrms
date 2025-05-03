@@ -1,138 +1,263 @@
-import React, { useEffect, useState } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableRow, Button, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Button } from './ui/button-old';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Skeleton } from './ui/skeleton';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
+import EmployeeDetails from './EmployeeDetails';
+import EmployeeUpdateForm from './EmployeeUpdateForm';
 
 function EmployeeList() {
   const [employees, setEmployees] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [departments, setDepartments] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showUpdate, setShowUpdate] = useState(false);
+  const [loginType, setLoginType] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchEmployees();
-  }, []);
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
 
-  const fetchEmployees = async () => {
-    try {
-      const res = await api.get('/employees');
-      console.log('Fetched employees:', res.data); // Debug log
-      setEmployees(res.data);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this employee?')) {
       try {
-        const response = await api.delete(`/employees/${id}`);
-        setEmployees(employees.filter(e => e._id !== id));
-        fetchEmployees(); // Refresh to ensure consistency
-        alert(response.data.message);
-      } catch (error) {
-        console.error('Error deleting employee:', error);
-        alert('Failed to delete employee: ' + (error.response?.data?.message || error.message));
+        // Fetch user details, but don't block other requests if it fails
+        let userFetchError = false;
+        const userRes = await api.get('/auth/me').catch(err => {
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            localStorage.removeItem('token');
+            navigate('/login');
+            throw new Error('not_authenticated');
+          }
+          userFetchError = true;
+          console.error('Error fetching user:', err);
+          return null; // Continue with other requests
+        });
+
+        if (userRes) {
+          setLoginType(userRes.data.loginType || '');
+        }
+
+        // Fetch employees
+        const empRes = await api.get('/employees').catch(err => {
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            localStorage.removeItem('token');
+            navigate('/login');
+            throw new Error('not_authenticated');
+          }
+          throw new Error('Failed to fetch employees. Please try again later.');
+        });
+        setEmployees(empRes.data);
+        setFilteredEmployees(empRes.data);
+
+        // Fetch departments
+        const deptRes = await api.get('/departments').catch(err => {
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            localStorage.removeItem('token');
+            navigate('/login');
+            throw new Error('not_authenticated');
+          }
+          throw new Error('Failed to fetch departments. Please try again later.');
+        });
+        setDepartments(deptRes.data.filter(dept => dept._id && dept._id.trim() !== ''));
+
+        // If user fetch failed but employees and departments succeeded, show a warning
+        if (userFetchError) {
+          setError('Failed to fetch user details. Some features may be unavailable.');
+        }
+      } catch (err) {
+        if (err.message !== 'not_authenticated') {
+          console.error('Error fetching data:', err);
+          setError(err.message || 'An unexpected error occurred. Please try again later.');
+        }
+      } finally {
+        setLoading(false);
       }
+    };
+    fetchData();
+  }, [navigate]);
+
+  useEffect(() => {
+    let filtered = employees;
+    if (search) {
+      filtered = filtered.filter(emp =>
+        emp.name.toLowerCase().includes(search.toLowerCase()) ||
+        emp.employeeId.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    if (departmentFilter && departmentFilter !== 'all') {
+      filtered = filtered.filter(emp => emp.department?._id === departmentFilter);
+    }
+    setFilteredEmployees(filtered);
+  }, [search, departmentFilter, employees]);
+
+  const handleLockToggle = async (id) => {
+    try {
+      const response = await api.patch(`/employees/${id}/lock`);
+      setEmployees(employees.map(emp => emp._id === id ? response.data : emp));
+      setFilteredEmployees(filteredEmployees.map(emp => emp._id === id ? response.data : emp));
+    } catch (err) {
+      console.error('Error toggling lock:', err);
+      setError('Failed to toggle lock. Please try again.');
     }
   };
 
   const handleViewDetails = (employee) => {
     setSelectedEmployee(employee);
-    setOpenDialog(true);
+    setShowDetails(true);
   };
 
-  const handleLockUnlock = async (id, locked) => {
-    try {
-      const response = await api.patch(`/employees/${id}/lock`);
-      const updatedEmployee = response.data; // Assuming response.data contains the updated employee
-      setEmployees(employees.map(emp => emp._id === id ? { ...emp, locked: updatedEmployee.locked } : emp));
-      alert(`Employee ${updatedEmployee.locked ? 'locked' : 'unlocked'} successfully`);
-    } catch (error) {
-      console.error('Error locking/unlocking employee:', error);
-      alert('Failed to lock/unlock employee: ' + (error.response?.data?.message || error.message));
-    }
+  const handleUpdate = (employee) => {
+    setSelectedEmployee(employee);
+    setShowUpdate(true);
   };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
+  const handleCloseModal = () => {
+    setShowDetails(false);
+    setShowUpdate(false);
     setSelectedEmployee(null);
   };
 
+  const handleUpdateSuccess = (updatedEmployee) => {
+    setEmployees(employees.map(emp => emp._id === updatedEmployee._id ? updatedEmployee : emp));
+    setFilteredEmployees(filteredEmployees.map(emp => emp._id === updatedEmployee._id ? updatedEmployee : emp));
+    handleCloseModal();
+  };
+
+  if (loading) {
+    return (
+      <ContentLayout title="Employee List">
+        <div className="w-full max-w-6xl mx-auto">
+          <div className="mb-6 flex flex-col md:flex-row gap-4">
+            <Skeleton className="h-10 max-w-sm" />
+            <Skeleton className="h-10 max-w-sm" />
+          </div>
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </ContentLayout>
+    );
+  }
+
+  if (error && employees.length === 0) {
+    return (
+      <ContentLayout title="Employee List">
+        <div className="w-full max-w-6xl mx-auto">
+          <p className="text-red-500">{error}</p>
+        </div>
+      </ContentLayout>
+    );
+  }
+
   return (
-    <ContentLayout title="Employees">
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Employee ID</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Department</TableCell>
-            <TableCell>Position</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {employees.map(employee => (
-            <TableRow key={employee._id}>
-              <TableCell>{employee.employeeId}</TableCell>
-              <TableCell>{employee.name}</TableCell>
-              <TableCell>{employee.department?.name || 'N/A'}</TableCell>
-              <TableCell>{employee.position}</TableCell>
-              <TableCell>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="small"
-                  onClick={() => handleViewDetails(employee)}
-                  style={{ marginRight: 8 }}
-                >
-                  View Details
-                </Button>
-                <Button
-                  variant="contained"
-                  color={employee.locked ? 'success' : 'error'}
-                  size="small"
-                  onClick={() => handleLockUnlock(employee._id, employee.locked)}
-                  style={{ marginRight: 8 }}
-                >
-                  {employee.locked ? 'Unlock' : 'Lock'}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="error"
-                  size="small"
-                  onClick={() => handleDelete(employee._id)}
-                >
-                  Delete
-                </Button>
-              </TableCell>
+    <ContentLayout title="Employee List">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-6xl mx-auto"
+      >
+        {error && (
+          <p className="text-yellow-500 mb-4">{error}</p>
+        )}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <Input
+            placeholder="Search by name or ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
+          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <SelectTrigger className="max-w-sm">
+              <SelectValue placeholder="Filter by department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {departments.map(dept => (
+                dept._id && <SelectItem key={dept._id} value={dept._id}>{dept.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <Dialog open={openDialog} onClose={handleCloseDialog}>
-        <DialogTitle>Employee Details</DialogTitle>
-        <DialogContent>
-          {selectedEmployee && (
-            <div>
-              <Typography><strong>Employee ID:</strong> {selectedEmployee.employeeId}</Typography>
-              <Typography><strong>User ID:</strong> {selectedEmployee.userId}</Typography>
-              <Typography><strong>Name:</strong> {selectedEmployee.name}</Typography>
-              <Typography><strong>Date of Birth:</strong> {new Date(selectedEmployee.dateOfBirth).toDateString()}</Typography>
-              <Typography><strong>Mobile Number:</strong> {selectedEmployee.mobileNumber}</Typography>
-              <Typography><strong>Address:</strong> {selectedEmployee.address}</Typography>
-              <Typography><strong>Aadhar Number:</strong> {selectedEmployee.aadharNumber}</Typography>
-              <Typography><strong>Date of Joining:</strong> {new Date(selectedEmployee.dateOfJoining).toDateString()}</Typography>
-              <Typography><strong>Department:</strong> {selectedEmployee.department?.name || 'N/A'}</Typography>
-              <Typography><strong>Position:</strong> {selectedEmployee.position}</Typography>
-              <Typography><strong>Role:</strong> {selectedEmployee.role}</Typography>
-              <Typography><strong>Locked:</strong> {selectedEmployee.locked ? 'Yes' : 'No'}</Typography>
-            </div>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} color="primary">Close</Button>
-        </DialogActions>
-      </Dialog>
+          </TableHeader>
+          <TableBody>
+            {filteredEmployees.map(emp => (
+              <TableRow key={emp._id}>
+                <TableCell>{emp.employeeId}</TableCell>
+                <TableCell>{emp.name}</TableCell>
+                <TableCell>{emp.department?.name || 'N/A'}</TableCell>
+                <TableCell className="space-x-2">
+                  <Button
+                    onClick={() => handleViewDetails(emp)}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    View Details
+                  </Button>
+                  {loginType === 'Admin' && (
+                    <>
+                      <Button
+                        onClick={() => handleUpdate(emp)}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Update
+                      </Button>
+                      <Button
+                        onClick={() => handleLockToggle(emp._id)}
+                        className={emp.locked ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}
+                      >
+                        {emp.locked ? 'Unlock' : 'Lock'}
+                      </Button>
+                    </>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {showDetails && selectedEmployee && (
+          <EmployeeDetails
+            employee={selectedEmployee}
+            onClose={handleCloseModal}
+            isAdmin={loginType === 'Admin'}
+            onLockToggle={async (section) => {
+              try {
+                const response = await api.patch(`/employees/${selectedEmployee._id}/lock-section`, { section });
+                setSelectedEmployee(response.data);
+                setEmployees(employees.map(emp => emp._id === response.data._id ? response.data : emp));
+                setFilteredEmployees(filteredEmployees.map(emp => emp._id === response.data._id ? response.data : emp));
+              } catch (err) {
+                console.error('Error toggling section lock:', err);
+                setError('Failed to toggle section lock. Please try again.');
+              }
+            }}
+          />
+        )}
+        {showUpdate && selectedEmployee && (
+          <EmployeeUpdateForm
+            employee={selectedEmployee}
+            onClose={handleCloseModal}
+            onUpdate={handleUpdateSuccess}
+            isAdmin={loginType === 'Admin'}
+          />
+        )}
+      </motion.div>
     </ContentLayout>
   );
 }

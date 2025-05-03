@@ -13,7 +13,7 @@
     "aliases": {
       "components": "/components",
       "utils": "hrms-frontend/src/components/lib/utils",
-      "ui": "hrms-frontend/src/components/ui",
+      "ui": "src/components/ui",
       "lib": "hrms-frontend/src/components/lib",
       "hooks": "@/hooks"
     },
