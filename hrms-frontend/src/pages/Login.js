@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button-old';
 import { Label } from '../components/ui/label';
 //import { cn } from '../components/lib/utils';
-import logo from '../logo.png';
+import logo from '../logo1.png';
 
 function Login() {
   const [email, setEmail] = useState('');

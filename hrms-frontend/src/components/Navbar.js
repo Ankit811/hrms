@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import Notification from './Notification';
 import { AuthContext } from '../context/AuthContext';
-import logo from '../logo.png';
+import logo from '../logo1.png';
 import io from 'socket.io-client';
 
 function Navbar() {
