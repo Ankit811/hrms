@@ -40,6 +40,7 @@ function Profile() {
       return;
     }
     api.put(`/employees/${user.id}`, profile)
+      // eslint-disable-next-line no-unused-vars
       .then(res => alert('Profile updated successfully'))
       .catch(err => alert('Failed to update profile: ' + err.response?.data?.message || err.message));
   };

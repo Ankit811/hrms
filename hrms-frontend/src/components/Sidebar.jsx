@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+//import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/button-old';
 import { LayoutDashboard, Users, FileText, Calendar, BarChart, LogOut, Menu } from 'lucide-react';

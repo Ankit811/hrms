@@ -1,53 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Button } from './ui/button-old';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Card, CardContent } from './ui/card';
-import { Dialog, DialogContent } from '../components/ui/dialog';
+//import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '../components/ui/button-old';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Card, CardContent } from '../components/ui/card';
 import api from '../services/api';
+import ContentLayout from './ContentLayout';
 
-function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
+function EmployeeForm() {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    employeeId: employee.employeeId || '',
-    userId: employee.userId || '',
-    name: employee.name || '',
-    dateOfBirth: employee.dateOfBirth ? new Date(employee.dateOfBirth).toISOString().split('T')[0] : '',
-    fatherName: employee.fatherName || '',
-    motherName: employee.motherName || '',
-    mobileNumber: employee.mobileNumber || '',
-    permanentAddress: employee.permanentAddress || '',
-    currentAddress: employee.currentAddress || '',
-    email: employee.email || '',
+    employeeId: '',
+    userId: '',
+    name: '',
+    dateOfBirth: '',
+    fatherName: '',
+    motherName: '',
+    mobileNumber: '',
+    permanentAddress: '',
+    currentAddress: '',
+    email: '',
     password: '',
-    aadharNumber: employee.aadharNumber || '',
-    gender: employee.gender || '',
-    maritalStatus: employee.maritalStatus || '',
-    spouseName: employee.spouseName || '',
-    emergencyContactName: employee.emergencyContactName || '',
-    emergencyContactNumber: employee.emergencyContactNumber || '',
-    dateOfJoining: employee.dateOfJoining ? new Date(employee.dateOfJoining).toISOString().split('T')[0] : '',
-    reportingManager: employee.reportingManager?._id || null, // Use null instead of ''
-    status: employee.status || '',
-    probationPeriod: employee.probationPeriod || '',
-    confirmationDate: employee.confirmationDate ? new Date(employee.confirmationDate).toISOString().split('T')[0] : '',
-    referredBy: employee.referredBy || '',
-    loginType: employee.loginType || '',
-    designation: employee.designation || '',
-    location: employee.location || '',
-    department: employee.department?._id || null, // Use null instead of ''
-    employeeType: employee.employeeType || '',
-    panNumber: employee.panNumber || '',
-    pfNumber: employee.pfNumber || '',
-    uanNumber: employee.uanNumber || '',
-    esiNumber: employee.esiNumber || '',
-    paymentType: employee.paymentType || '',
-    bankName: employee.bankDetails?.bankName || '',
-    bankBranch: employee.bankDetails?.bankBranch || '',
-    accountNumber: employee.bankDetails?.accountNumber || '',
-    ifscCode: employee.bankDetails?.ifscCode || '',
+    aadharNumber: '',
+    gender: '',
+    maritalStatus: '',
+    spouseName: '',
+    emergencyContactName: '',
+    emergencyContactNumber: '',
+    dateOfJoining: '',
+    reportingManager: '',
+    status: '',
+    probationPeriod: '',
+    confirmationDate: '',
+    referredBy: '',
+    loginType: '',
+    designation: '',
+    location: '',
+    department: '',
+    employeeType: '',
+    panNumber: '',
+    pfNumber: '',
+    uanNumber: '',
+    esiNumber: '',
+    paymentType: '',
+    bankName: '',
+    bankBranch: '',
+    accountNumber: '',
+    ifscCode: '',
   });
   const [files, setFiles] = useState({
     profilePicture: null,
@@ -74,13 +76,8 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
           api.get('/departments'),
           api.get('/employees')
         ]);
-        // Filter out departments with empty _id
-        setDepartments(deptRes.data.filter(dept => dept._id && dept._id.trim() !== ''));
-        // Filter out managers with empty _id and valid loginType
-        setManagers(
-          empRes.data
-            .filter(emp => ['HOD', 'Admin', 'CEO'].includes(emp.loginType) && emp._id && emp._id.trim() !== '')
-        );
+        setDepartments(deptRes.data);
+        setManagers(empRes.data.filter(emp => ['HOD', 'Admin', 'CEO', 'CIO'].includes(emp.loginType)));
       } catch (err) {
         console.error('Error fetching data:', err);
       }
@@ -105,14 +102,11 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
   };
 
   const handleSelectChange = (name, value) => {
-    setForm({ ...form, [name]: value === '' ? null : value }); // Convert empty string to null
+    setForm({ ...form, [name]: value });
     setErrors({ ...errors, [name]: '' });
 
     if (name === 'status' && value !== 'Probation') {
       setForm(prev => ({ ...prev, probationPeriod: '', confirmationDate: '' }));
-    }
-    if (name === 'paymentType' && value !== 'Bank Transfer') {
-      setForm(prev => ({ ...prev, bankName: '', bankBranch: '', accountNumber: '', ifscCode: '' }));
     }
   };
 
@@ -124,12 +118,13 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
 
   const validateStep = () => {
     const newErrors = {};
-    if (step === 1 && (isAdmin || !employee.basicInfoLocked)) {
+    if (step === 1) {
       const requiredFields = [
         'employeeId', 'userId', 'name', 'dateOfBirth', 'fatherName', 'motherName',
-        'mobileNumber', 'permanentAddress', 'currentAddress', 'email', 'aadharNumber',
-        'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber',
-        'dateOfJoining', 'reportingManager', 'status', 'loginType'
+        'mobileNumber', 'permanentAddress', 'currentAddress', 'email', 'password', 
+        'aadharNumber', 'gender', 'maritalStatus', 'emergencyContactName', 
+        'emergencyContactNumber', 'dateOfJoining', 'reportingManager', 'status', 
+        'loginType'
       ];
       requiredFields.forEach(field => {
         if (!form[field] || form[field].trim() === '') {
@@ -155,14 +150,14 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
       if (form.mobileNumber && !/^\d{10}$/.test(form.mobileNumber)) {
         newErrors.mobileNumber = 'Mobile Number must be exactly 10 digits';
       }
-    } else if (step === 2 && (isAdmin || !employee.positionLocked)) {
+    } else if (step === 2) {
       const requiredFields = ['designation', 'location', 'department', 'employeeType'];
       requiredFields.forEach(field => {
         if (!form[field] || form[field].trim() === '') {
           newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
         }
       });
-    } else if (step === 3 && (isAdmin || !employee.statutoryLocked)) {
+    } else if (step === 3) {
       if (!form.panNumber || form.panNumber.trim() === '') {
         newErrors.panNumber = 'PAN Number is required';
       } else if (!/^[A-Z0-9]{10}$/.test(form.panNumber)) {
@@ -177,9 +172,16 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
       if (form.esiNumber && !/^\d{12}$/.test(form.esiNumber)) {
         newErrors.esiNumber = 'ESI Number must be 12 digits';
       }
-    } else if (step === 4 && (isAdmin || !employee.documentsLocked)) {
-      // Optional: Add validation for new file uploads if required
-    } else if (step === 5 && (isAdmin || !employee.paymentLocked)) {
+    } 
+    // else if (step === 4) {
+    //   const requiredFiles = ['tenthTwelfthDocs', 'graduationDocs', 'panCard', 'aadharCard', 'bankPassbook', 'medicalCertificate', 'backgroundVerification'];
+    //   requiredFiles.forEach(field => {
+    //     if (!files[field]) {
+    //       newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
+    //     }
+    //   });
+    // } 
+    else if (step === 5) {
       if (!form.paymentType) {
         newErrors.paymentType = 'Payment Type is required';
       }
@@ -213,43 +215,29 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
 
     const formData = new FormData();
     Object.keys(form).forEach(key => {
-      if (form[key] && form[key] !== null && (isAdmin || !employee[`${stepToSection(step)}Locked`])) {
-        formData.append(key, form[key]);
-      }
+      if (form[key]) formData.append(key, form[key]);
     });
     Object.keys(files).forEach(key => {
-      if (files[key] && (isAdmin || !employee.documentsLocked)) {
-        formData.append(key, files[key]);
-      }
+      if (files[key]) formData.append(key, files[key]);
     });
 
     try {
-      const response = await api.put(`/employees/${employee._id}`, formData, {
+      const response = await api.post('/employees', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      onUpdate(response.data);
-      alert('Employee updated successfully');
+      if (response.status === 201) {
+        alert('Employee created successfully');
+        navigate('/admin/employees');
+      }
     } catch (error) {
-      console.error('Error updating employee:', error.response?.data || error.message);
-      setErrors({ submit: error.response?.data?.message || 'Update failed. Please try again.' });
+      console.error('Error creating employee:', error.response?.data || error.message);
+      setErrors({ submit: error.response?.data?.message || 'Creation failed. Please try again.' });
     } finally {
       setLoading(false);
     }
   };
 
-  const stepToSection = (step) => {
-    switch (step) {
-      case 1: return 'basicInfo';
-      case 2: return 'position';
-      case 3: return 'statutory';
-      case 4: return 'documents';
-      case 5: return 'payment';
-      default: return '';
-    }
-  };
-
   const renderStep = () => {
-    const isEditable = isAdmin || !employee[`${stepToSection(step)}Locked`];
     switch (step) {
       case 1:
         return (
@@ -290,14 +278,13 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                   minLength={field.minLength}
                   pattern={field.pattern}
                   required
-                  disabled={!isEditable}
                 />
                 {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
               </motion.div>
             ))}
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.80 }}>
               <Label htmlFor="gender">Gender</Label>
-              <Select name="gender" value={form.gender} onValueChange={(value) => handleSelectChange('gender', value)} required disabled={!isEditable}>
+              <Select name="gender" value={form.gender} onValueChange={(value) => handleSelectChange('gender', value)} required>
                 <SelectTrigger className={errors.gender ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select gender" />
                 </SelectTrigger>
@@ -311,7 +298,7 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
             </motion.div>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.85 }}>
               <Label htmlFor="maritalStatus">Marital Status</Label>
-              <Select name="maritalStatus" value={form.maritalStatus} onValueChange={(value) => handleSelectChange('maritalStatus', value)} required disabled={!isEditable}>
+              <Select name="maritalStatus" value={form.maritalStatus} onValueChange={(value) => handleSelectChange('maritalStatus', value)} required>
                 <SelectTrigger className={errors.maritalStatus ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select marital status" />
                 </SelectTrigger>
@@ -334,20 +321,19 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                   className={errors.spouseName ? 'border-red-500' : ''}
                   placeholder="Enter spouse name"
                   required
-                  disabled={!isEditable}
                 />
                 {errors.spouseName && <p className="mt-1 text-sm text-red-500">{errors.spouseName}</p>}
               </motion.div>
             )}
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.95 }}>
               <Label htmlFor="reportingManager">Reporting Manager</Label>
-              <Select name="reportingManager" value={form.reportingManager || ''} onValueChange={(value) => handleSelectChange('reportingManager', value)} required disabled={!isEditable}>
+              <Select name="reportingManager" value={form.reportingManager} onValueChange={(value) => handleSelectChange('reportingManager', value)} required>
                 <SelectTrigger className={errors.reportingManager ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select reporting manager" />
                 </SelectTrigger>
                 <SelectContent>
                   {managers.map(m => (
-                    m._id && <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
+                    <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -355,7 +341,7 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
             </motion.div>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.00 }}>
               <Label htmlFor="status">Status</Label>
-              <Select name="status" value={form.status} onValueChange={(value) => handleSelectChange('status', value)} required disabled={!isEditable}>
+              <Select name="status" value={form.status} onValueChange={(value) => handleSelectChange('status', value)} required>
                 <SelectTrigger className={errors.status ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
@@ -379,7 +365,6 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                     className={errors.probationPeriod ? 'border-red-500' : ''}
                     placeholder="Enter probation period"
                     required
-                    disabled={!isEditable}
                   />
                   {errors.probationPeriod && <p className="mt-1 text-sm text-red-500">{errors.probationPeriod}</p>}
                 </motion.div>
@@ -393,7 +378,6 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                     onChange={handleChange}
                     className={errors.confirmationDate ? 'border-red-500' : ''}
                     required
-                    disabled={!isEditable}
                   />
                   {errors.confirmationDate && <p className="mt-1 text-sm text-red-500">{errors.confirmationDate}</p>}
                 </motion.div>
@@ -401,7 +385,7 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
             )}
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.15 }}>
               <Label htmlFor="loginType">Login Type</Label>
-              <Select name="loginType" value={form.loginType} onValueChange={(value) => handleSelectChange('loginType', value)} required disabled={!isEditable}>
+              <Select name="loginType" value={form.loginType} onValueChange={(value) => handleSelectChange('loginType', value)} required>
                 <SelectTrigger className={errors.loginType ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select login type" />
                 </SelectTrigger>
@@ -414,16 +398,6 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
               </Select>
               {errors.loginType && <p className="mt-1 text-sm text-red-500">{errors.loginType}</p>}
             </motion.div>
-            {!isEditable && (
-              <motion.div
-                className="col-span-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 1.20 }}
-              >
-                <p className="text-red-500">This section is locked. Contact an admin to unlock.</p>
-              </motion.div>
-            )}
           </div>
         );
       case 2:
@@ -449,20 +423,19 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                   className={errors[field.id] ? 'border-red-500' : ''}
                   placeholder={`Enter ${field.label.toLowerCase()}`}
                   required
-                  disabled={!isEditable}
                 />
                 {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
               </motion.div>
             ))}
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.10 }}>
               <Label htmlFor="department">Department</Label>
-              <Select name="department" value={form.department || ''} onValueChange={(value) => handleSelectChange('department', value)} required disabled={!isEditable}>
+              <Select name="department" value={form.department} onValueChange={(value) => handleSelectChange('department', value)} required>
                 <SelectTrigger className={errors.department ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {departments.map(dept => (
-                    dept._id && <SelectItem key={dept._id} value={dept._id}>{dept.name}</SelectItem>
+                  {departments.map(d => (
+                    <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -470,7 +443,7 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
             </motion.div>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
               <Label htmlFor="employeeType">Employee Type</Label>
-              <Select name="employeeType" value={form.employeeType} onValueChange={(value) => handleSelectChange('employeeType', value)} required disabled={!isEditable}>
+              <Select name="employeeType" value={form.employeeType} onValueChange={(value) => handleSelectChange('employeeType', value)} required>
                 <SelectTrigger className={errors.employeeType ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select employee type" />
                 </SelectTrigger>
@@ -481,16 +454,6 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
               </Select>
               {errors.employeeType && <p className="mt-1 text-sm text-red-500">{errors.employeeType}</p>}
             </motion.div>
-            {!isEditable && (
-              <motion.div
-                className="col-span-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.20 }}
-              >
-                <p className="text-red-500">This section is locked. Contact an admin to unlock.</p>
-              </motion.div>
-            )}
           </div>
         );
       case 3:
@@ -498,9 +461,9 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               { id: 'panNumber', label: 'PAN Number', type: 'text', pattern: '[A-Z0-9]{10}' },
-              { id: 'pfNumber', label: 'PF Number', type: 'text', pattern: '[0-9]{18}', required: false },
-              { id: 'uanNumber', label: 'UAN Number', type: 'text', pattern: '[0-9]{12}', required: false },
-              { id: 'esiNumber', label: 'ESI Number', type: 'text', pattern: '[0-9]{12}', required: false },
+              { id: 'pfNumber', label: 'PF Number (Optional)', type: 'text', pattern: '[0-9]{18}' },
+              { id: 'uanNumber', label: 'UAN Number (Optional)', type: 'text', pattern: '[0-9]{12}' },
+              { id: 'esiNumber', label: 'ESI Number (Optional)', type: 'text', pattern: '[0-9]{12}' },
             ].map((field, index) => (
               <motion.div
                 key={field.id}
@@ -518,45 +481,33 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                   className={errors[field.id] ? 'border-red-500' : ''}
                   placeholder={`Enter ${field.label.toLowerCase()}`}
                   pattern={field.pattern}
-                  required={field.required !== false}
-                  disabled={!isEditable}
+                  required={field.id === 'panNumber'}
                 />
                 {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
               </motion.div>
             ))}
-            {!isEditable && (
-              <motion.div
-                className="col-span-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.20 }}
-              >
-                <p className="text-red-500">This section is locked. Contact an admin to unlock.</p>
-              </motion.div>
-            )}
           </div>
         );
       case 4:
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { id: 'profilePicture', label: 'Profile Picture' },
-              { id: 'tenthTwelfthDocs', label: '10th & 12th Certificates' },
-              { id: 'graduationDocs', label: 'Graduation Certificates' },
-              { id: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates' },
-              { id: 'experienceCertificate', label: 'Experience Certificate' },
-              { id: 'salarySlips', label: 'Last 3 Months Salary Slips' },
-              { id: 'panCard', label: 'PAN Card' },
-              { id: 'aadharCard', label: 'Aadhar Card' },
-              { id: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque' },
-              { id: 'medicalCertificate', label: 'Medical Fitness Certificate' },
-              { id: 'backgroundVerification', label: 'Background Verification' },
+              { id: 'tenthTwelfthDocs', label: '10th & 12th Certificates (PDF, 5MB)', maxSize: '5MB' },
+              { id: 'graduationDocs', label: 'Graduation Certificates (PDF, 5MB)', maxSize: '5MB' },
+              { id: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates (PDF, 5MB, Optional)', maxSize: '5MB' },
+              { id: 'experienceCertificate', label: 'Experience Certificate (PDF, 5MB, Optional)', maxSize: '5MB' },
+              { id: 'panCard', label: 'PAN Card (PDF, 1MB)', maxSize: '1MB' },
+              { id: 'aadharCard', label: 'Aadhar Card (PDF, 1MB)', maxSize: '1MB' },
+              { id: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque (PDF, 1MB)', maxSize: '1MB' },
+              { id: 'medicalCertificate', label: 'Medical Fitness Certificate (PDF, 2MB)', maxSize: '2MB' },
+              { id: 'backgroundVerification', label: 'Background Verification (PDF, 2MB)', maxSize: '2MB' },
             ].map((field, index) => (
               <motion.div
                 key={field.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.05 }}
+                className={field.id === 'salarySlips' && !files.experienceCertificate ? 'hidden' : ''}
               >
                 <Label htmlFor={field.id}>{field.label}</Label>
                 <Input
@@ -566,31 +517,41 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                   accept="application/pdf"
                   onChange={handleFileChange}
                   className={errors[field.id] ? 'border-red-500' : ''}
-                  disabled={!isEditable}
+                  required={field.id !== 'postgraduationDocs' && field.id !== 'experienceCertificate' && field.id !== 'salarySlips'}
                 />
-                {employee[field.id] && (
-                  <a
-                    href={`/api/employees/files/${employee[field.id]}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    View Current {field.label}
-                  </a>
-                )}
                 {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
               </motion.div>
             ))}
-            {!isEditable && (
+            {files.experienceCertificate && (
               <motion.div
-                className="col-span-2"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.55 }}
+                transition={{ duration: 0.4, delay: 0.45 }}
               >
-                <p className="text-red-500">This section is locked. Contact an admin to unlock.</p>
+                <Label htmlFor="salarySlips">Last 3 Months Salary Slips (PDF, 1MB)</Label>
+                <Input
+                  id="salarySlips"
+                  name="salarySlips"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className={errors.salarySlips ? 'border-red-500' : ''}
+                  required
+                />
+                {errors.salarySlips && <p className="mt-1 text-sm text-red-500">{errors.salarySlips}</p>}
               </motion.div>
             )}
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.50 }}>
+              <Label htmlFor="profilePicture">Profile Picture</Label>
+              <Input
+                id="profilePicture"
+                name="profilePicture"
+                type="file"
+                onChange={handleFileChange}
+                className={errors.profilePicture ? 'border-red-500' : ''}
+              />
+              {errors.profilePicture && <p className="mt-1 text-sm text-red-500">{errors.profilePicture}</p>}
+            </motion.div>
           </div>
         );
       case 5:
@@ -598,7 +559,7 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
               <Label htmlFor="paymentType">Payment Type</Label>
-              <Select name="paymentType" value={form.paymentType} onValueChange={(value) => handleSelectChange('paymentType', value)} required disabled={!isEditable}>
+              <Select name="paymentType" value={form.paymentType} onValueChange={(value) => handleSelectChange('paymentType', value)} required>
                 <SelectTrigger className={errors.paymentType ? 'border-red-500' : ''}>
                   <SelectValue placeholder="Select payment type" />
                 </SelectTrigger>
@@ -633,22 +594,11 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
                       className={errors[field.id] ? 'border-red-500' : ''}
                       placeholder={`Enter ${field.label.toLowerCase()}`}
                       required
-                      disabled={!isEditable}
                     />
                     {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
                   </motion.div>
                 ))}
               </>
-            )}
-            {!isEditable && (
-              <motion.div
-                className="col-span-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.30 }}
-              >
-                <p className="text-red-500">This section is locked. Contact an admin to unlock.</p>
-              </motion.div>
             )}
           </div>
         );
@@ -658,79 +608,59 @@ function EmployeeUpdateForm({ employee, onClose, onUpdate, isAdmin }) {
   };
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card className="bg-white shadow-lg border-none">
-            <CardContent className="p-6">
-              <form onSubmit={handleSubmit}>
-                <div className="mb-6">
-                  <h2 className="text-xl font-semibold">
-                    {step === 1 && 'Basic Information'}
-                    {step === 2 && 'Employee Position'}
-                    {step === 3 && 'Statutory Information'}
-                    {step === 4 && 'Document Upload'}
-                    {step === 5 && 'Payment Information'}
-                  </h2>
-                  <div className="flex justify-between mt-2">
-                    {[1, 2, 3, 4, 5].map(s => (
-                      <div key={s} className={`h-2 w-1/5 rounded ${s <= step ? 'bg-blue-600' : 'bg-gray-200'}`} />
-                    ))}
-                  </div>
-                </div>
-                {renderStep()}
-                {errors.submit && <p className="mt-4 text-red-500">{errors.submit}</p>}
-                <div className="mt-6 flex justify-between">
-                  {step > 1 && (
-                    <Button
-                      type="button"
-                      onClick={handlePrevious}
-                      className="bg-gray-600 hover:bg-gray-700 text-white"
-                      disabled={loading}
-                    >
-                      Previous
-                    </Button>
-                  )}
-                  <div className="flex gap-2">
-                    {step < 5 ? (
-                      <Button
-                        type="button"
-                        onClick={handleNext}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        disabled={loading}
-                      >
-                        Next
-                      </Button>
-                    ) : (
-                      <Button
-                        type="submit"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        disabled={loading}
-                      >
-                        {loading ? 'Updating...' : 'Update'}
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      onClick={onClose}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                      disabled={loading}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </DialogContent>
-    </Dialog>
+    <ContentLayout title="Add Employee">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-4xl mx-auto"
+      >
+        <Card className="bg-white shadow-lg border-none">
+          <CardContent className="p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">
+                {step === 1 && 'Basic Information'}
+                {step === 2 && 'Employee Position'}
+                {step === 3 && 'Statutory Information'}
+                {step === 4 && 'Document Upload'}
+                {step === 5 && 'Payment Information'}
+              </h2>
+              <div className="flex justify-between mt-2">
+                {[1, 2, 3, 4, 5].map(s => (
+                  <div key={s} className={`h-2 w-1/5 rounded ${s <= step ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                ))}
+              </div>
+            </div>
+            <form onSubmit={step === 5 ? handleSubmit : handleNext}>
+              {renderStep()}
+              {errors.submit && (
+                <p className="mt-4 text-sm text-red-500 text-center">{errors.submit}</p>
+              )}
+              <div className="mt-6 flex justify-between">
+                {step > 1 && (
+                  <Button
+                    type="button"
+                    onClick={handlePrevious}
+                    className="bg-gray-600 hover:bg-gray-700 text-white"
+                  >
+                    Previous
+                  </Button>
+                )}
+                <Button
+                  type={step === 5 ? 'submit' : 'button'}
+                  onClick={step < 5 ? handleNext : undefined}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white ml-auto"
+                >
+                  {loading ? 'Submitting...' : step === 5 ? 'Submit' : 'Next'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </ContentLayout>
   );
 }
 
-export default EmployeeUpdateForm;
+export default EmployeeForm;

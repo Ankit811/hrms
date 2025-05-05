@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { motion } from 'framer-motion';
+//import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import api from '../services/api';

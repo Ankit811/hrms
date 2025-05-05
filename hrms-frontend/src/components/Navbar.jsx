@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useContext } from 'react';
-import { motion } from 'framer-motion';
+//import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import Notification from './Notification';

@@ -28,6 +28,7 @@ function Report() {
       link.setAttribute('download', `attendance_${form.type}.pdf`);
       document.body.appendChild(link);
       link.click();
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       alert('Error generating report');
     }
