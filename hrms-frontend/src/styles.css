@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Styles */
+:root {
+  --primary: #1976d2;
+  --secondary: #4caf50;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background-color: #f0f2f5; /* Fallback background */
+}
+
+/* Container for Sidebar + Content */
+.container {
+  display: flex; /* Corrected from 'Box' to 'flex' */
+  min-height: 100vh;
+  flex-direction: row; /* Ensure row layout for Sidebar and Content */
+  justify-content: flex-start; /* Align items from the start, centering will be handled by ContentLayout */
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column; /* Stack Sidebar and Content vertically on mobile */
+  }
+}
