@@ -1,7 +1,7 @@
 import React, { useContext, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext';
-import ThemeContextProvider from './context/ThemeContext';
+import ThemeContextProvider from './context/ThemeProvider';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 import CEO from './pages/CEO';
@@ -23,30 +23,28 @@ function App() {
 
   return (
     <ThemeContextProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/admin/*"
-            element={user && user.loginType === 'Admin' ? <Admin /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/ceo/*"
-            element={user && user.loginType === 'CEO' ? <CEO /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/hod/*"
-            element={user && user.loginType === 'HOD' ? <HOD /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/employee/*"
-            element={user && user.loginType === 'Employee' ? <Employee /> : <Navigate to="/login" />}
-          />
-          <Route path="/" element={<Navigate to="/login" />} />
-          {/* Fallback route for debugging */}
-          <Route path="*" element={<div>404: Route not found. Please navigate to <a href="/login">Login</a>.</div>} />
-        </Routes>
-      </Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/admin/*"
+          element={user && user.loginType === 'Admin' ? <Admin /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/ceo/*"
+          element={user && user.loginType === 'CEO' ? <CEO /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/hod/*"
+          element={user && user.loginType === 'HOD' ? <HOD /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/employee/*"
+          element={user && user.loginType === 'Employee' ? <Employee /> : <Navigate to="/login" />}
+        />
+        <Route path="/" element={<Navigate to="/login" />} />
+        {/* Fallback route for debugging */}
+        <Route path="*" element={<div>404: Route not found. Please navigate to <a href="/login">Login</a>.</div>} />
+      </Routes>
     </ThemeContextProvider>
   );
 }

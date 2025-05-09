@@ -1,77 +1,82 @@
 import React, { useEffect, useState } from 'react';
-import { IconButton, Badge, Popover, List, ListItem, ListItemText } from '@mui/material';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import { Popover, Transition } from '@headlessui/react';
+import { Bell } from 'lucide-react';
 import api from '../services/api';
 
 function Notification() {
   const [notifications, setNotifications] = useState([]);
-  const [anchorEl, setAnchorEl] = useState(null);
 
   useEffect(() => {
     api.get('/notifications').then((res) => setNotifications(res.data));
   }, []);
 
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
+  const handleClose = (close) => {
     notifications.forEach((n) => {
       if (!n.read) {
         api.put(`/notifications/${n._id}/read`);
       }
     });
     setNotifications(notifications.map((n) => ({ ...n, read: true })));
+    close();
   };
 
-  const open = Boolean(anchorEl);
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div>
-      <IconButton
-        onClick={handleClick}
-        sx={{ color: '#ffffff' }} // Fixed white color
-      >
-        <Badge badgeContent={notifications.filter((n) => !n.read).length} color="error">
-          <NotificationsIcon sx={{ fontSize: '28px' }} />
-        </Badge>
-      </IconButton>
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{
-          sx: {
-            bgcolor: 'background.paper',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            borderRadius: '8px',
-            mt: 1,
-          },
-        }}
-      >
-        <List sx={{ minWidth: '300px', maxHeight: '400px', overflowY: 'auto' }}>
-          {notifications.length === 0 ? (
-            <ListItem>
-              <ListItemText primary="No notifications" primaryTypographyProps={{ fontWeight: 500 }} />
-            </ListItem>
-          ) : (
-            notifications.map((n) => (
-              <ListItem key={n._id} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <ListItemText
-                  primary={n.message}
-                  secondary={new Date(n.createdAt).toLocaleString()}
-                  primaryTypographyProps={{ fontWeight: 500, fontSize: '14px' }}
-                  secondaryTypographyProps={{ fontSize: '12px', color: 'text.secondary' }}
-                />
-              </ListItem>
-            ))
-          )}
-        </List>
-      </Popover>
-    </div>
+    <Popover className="relative">
+      {({ open, close }) => (
+        <>
+          <Popover.Button
+            onClick={() => {
+              if (open) handleClose(close);
+            }}
+            className="relative focus:outline-none"
+          >
+            <div className="text-foreground">
+              <Bell className="h-7 w-7" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+          </Popover.Button>
+          <Transition
+            as={React.Fragment}
+            enter="transition ease-out duration-200"
+            enterFrom="opacity-0 translate-y-1"
+            enterTo="opacity-100 translate-y-0"
+            leave="transition ease-in duration-150"
+            leaveFrom="opacity-100 translate-y-0"
+            leaveTo="opacity-0 translate-y-1"
+          >
+            <Popover.Panel className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-popover text-popover-foreground rounded-lg shadow-xl z-50">
+              <div className="p-2">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-2 text-foreground font-medium">
+                    No notifications
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n._id}
+                      className="px-4 py-2 border-b border-border last:border-b-0"
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        {n.message}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Popover.Panel>
+          </Transition>
+        </>
+      )}
+    </Popover>
   );
 }
 

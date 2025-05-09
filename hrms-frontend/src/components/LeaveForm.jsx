@@ -20,7 +20,6 @@ import {
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
-import io from 'socket.io-client'
 
 function LeaveForm() {
   const { user } = useContext(AuthContext);
@@ -61,8 +60,32 @@ function LeaveForm() {
     setForm(prev => ({ ...prev, isCompensatory: checked }));
   };
 
+  const validateForm = () => {
+    if (!form.leaveType) return 'Leave Type is required';
+    if (!form.category) return 'Category is required';
+    if (!form.reason) return 'Reason is required';
+    if (!form.chargeGivenTo) return 'Charge Given To is required';
+    if (!form.emergencyContact) return 'Emergency Contact is required';
+    if (form.duration === 'half' && (!form.halfDay.date || !form.halfDay.session)) {
+      return 'Half Day Date and Session are required';
+    }
+    if (form.duration === 'full' && (!form.fullDay.from || !form.fullDay.to)) {
+      return 'Full Day From and To dates are required';
+    }
+    if (form.isCompensatory && !form.compensatoryDetails) {
+      return 'Compensatory Details are required';
+    }
+    return null;
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
+    const validationError = validateForm();
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const leaveData = {
@@ -85,7 +108,14 @@ function LeaveForm() {
       });
     } catch (err) {
       console.error('Leave submit error:', err.response?.data || err.message);
-      alert('Error submitting leave: ' + (err.response?.data?.message || err.message));
+      const errorMessage = err.response?.data?.message || 'An error occurred while submitting the leave';
+      if (errorMessage === 'Employee designation is required') {
+        alert('Error: Your employee profile is missing designation information. Please contact HR to update your profile.');
+      } else if (errorMessage === 'Employee department is required') {
+        alert('Error: Your employee profile is missing department information. Please contact HR to update your profile.');
+      } else {
+        alert(`Error submitting leave: ${errorMessage}`);
+      }
     } finally {
       setSubmitting(false);
     }

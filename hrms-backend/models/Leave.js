@@ -4,12 +4,12 @@ const leaveSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
   employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   name: { type: String, required: true },
-  position: { type: String, required: true },
+  designation: { type: String, required: true }, // Changed from position
   department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
   leaveType: { type: String, enum: ['Paid', 'Unpaid'], required: true },
-  category: { type: String, enum: ['Casual', 'Sick'], required: true },
+  category: { type: String, enum: ['Casual', 'Sick', 'Emergency'], required: true }, // Added Emergency
   halfDay: {
-    time: { type: String, enum: ['Afternoon', 'Before noon'] },
+    time: { type: String, enum: ['forenoon', 'afternoon'] }, // Updated enum
     date: { type: Date }
   },
   fullDay: {

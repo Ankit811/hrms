@@ -1,11 +1,31 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Button } from '../components/ui/button';
-import { Label } from '../components/ui/label';
-import logo from '../assets/logo1.png'; // Updated to Vite's asset import
+import logo from '../assets/logo1.png';
+import { RetroGrid } from '../components/magicui/RetroGrid';
+import { AnimatedGradientText } from '../components/magicui/AnimatedGradientText';
+import { ShineBorder } from '../components/magicui/ShineBorder';
+import GlareCard from '../components/magicui/GlareCard';
+import { cn } from '../components/lib/utils';
+import { motion } from 'framer-motion';
+
+function AnimatedShinyButton({ children, onClick, className }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative w-full px-6 py-3 text-white font-medium rounded-md bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500",
+        "transition-all duration-300 ease-in-out",
+        "hover:shadow-lg hover:shadow-indigo-500/50",
+        "before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+        "before:animate-shine before:bg-[length:200%_100%]",
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -33,48 +53,103 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-blue-600 to-blue-400 p-4">
-      <Card className="w-full max-w-md shadow-xl animate-in fade-in zoom-in-95 duration-500">
-        <CardHeader className="flex flex-col items-center gap-2">
-          <img src={logo} alt="Company Logo" className="w-24 h-auto mb-2" />
-          <CardTitle className="text-center text-2xl font-bold text-gray-800">
-            HR Management System
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="relative h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-white">
+      {/* Retro Grid Background */}
+      <RetroGrid opacity={0.5} cellSize={80} color="#d1d5db" />
+
+      {/* Logo with Animation and Increased Gap */}
+      <motion.div
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="mb-6"
+      >
+        <img src={logo} alt="Company Logo" className="w-48 h-auto" />
+      </motion.div>
+
+      {/* Animated Text with Uppercase */}
+      <motion.div
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className="mb-8"
+      >
+        <AnimatedGradientText
+          className="text-center text-4xl font-bold uppercase"
+          colorFrom="#4f46e5"
+          colorTo="#ec4899"
+          speed={1.5}
+        >
+          Welcome to Accelor's HR Management System
+        </AnimatedGradientText>
+      </motion.div>
+
+      {/* Login Card with Animation and Wider Width */}
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.8, delay: 0.4 }}
+      >
+        <GlareCard className="relative z-10 w-full max-w-lg p-6">
+          <ShineBorder
+            borderWidth={1.25}
+            duration={8}
+            shineColor={["#4f46e5", "#a855f7", "#ec4899"]}
+          >
+            {/* Wrapper to ensure ShineBorder visibility */}
+            <div className="p-1">
+              <div className="relative w-full bg-white rounded-none p-6 shadow-2xl">
+                {/* Login Form */}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="relative">
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="w-full px-4 py-2 bg-gray-100 text-gray-900 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 focus:outline-none transition-all duration-200 placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="relative">
+                    <label
+                      htmlFor="password"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Password
+                    </label>
+                    <input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className="w-full px-4 py-2 bg-gray-100 text-gray-900 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 focus:outline-none transition-all duration-200 placeholder-gray-400"
+                    />
+                    {password && password.length < 6 && (
+                      <p className="text-sm text-red-600 mt-1">
+                        Minimum 6 characters required
+                      </p>
+                    )}
+                  </div>
+                  <AnimatedShinyButton type="submit">
+                    Login
+                  </AnimatedShinyButton>
+                </form>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-              {password && password.length < 6 && (
-                <p className="text-sm text-red-500 mt-1">Minimum 6 characters required</p>
-              )}
-            </div>
-            <Button type="submit" className="w-full font-medium">
-              Login
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </ShineBorder>
+        </GlareCard>
+      </motion.div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -23,6 +23,7 @@ import {
   SelectItem,
   SelectValue,
 } from "../components/ui/select";
+import ReactPaginate from 'react-paginate';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
 import { AuthContext } from '../context/AuthContext';
@@ -37,79 +38,120 @@ function LeaveList() {
     fromDate: '',
     toDate: '',
   });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [limit] = useState(10);
+
+  const fetchLeaves = useCallback(async (currentPage = page) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const query = new URLSearchParams({
+        leaveType: filters.leaveType,
+        status: filters.status,
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+        page: currentPage,
+        limit,
+      }).toString();
+      const res = await api.get(`/leaves?${query}`);
+      setLeaves(res.data.leaves);
+      setFiltered(res.data.leaves);
+      setTotal(res.data.total);
+      setPage(res.data.page);
+    } catch (err) {
+      console.error('Error fetching leave list:', err);
+      setError(err.response?.data?.message || 'Failed to fetch leaves. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, page, limit]);
 
   useEffect(() => {
-    api.get('/leaves')
-      .then(res => {
-        setLeaves(res.data);
-        setFiltered(res.data);
-      })
-      .catch(err => {
-        console.error('Error fetching leave list:', err);
-      });
-  }, []);
+    fetchLeaves();
+  }, [fetchLeaves]);
 
   const handleFilterChange = (name, value) => {
     const newFilters = { ...filters, [name]: value };
     setFilters(newFilters);
-    applyFilters(newFilters);
-  };
-
-  const applyFilters = (filterSet) => {
-    let data = [...leaves];
-
-    if (filterSet.leaveType && filterSet.leaveType !== 'all') {
-      data = data.filter(leave => leave.leaveType === filterSet.leaveType);
-    }
-
-    if (filterSet.status && filterSet.status !== 'all') {
-      data = data.filter(leave =>
-        leave.status.hod === filterSet.status ||
-        leave.status.admin === filterSet.status ||
-        leave.status.ceo === filterSet.status
-      );
-    }
-
-    if (filterSet.fromDate) {
-      const from = new Date(filterSet.fromDate);
-      data = data.filter(leave => {
-        const leaveFrom = new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt);
-        return leaveFrom >= from;
+    setPage(1); // Reset to first page on filter change
+    const query = new URLSearchParams({
+      leaveType: newFilters.leaveType,
+      status: newFilters.status,
+      fromDate: newFilters.fromDate,
+      toDate: newFilters.toDate,
+      page: 1,
+      limit,
+    }).toString();
+    setLoading(true);
+    api.get(`/leaves?${query}`)
+      .then(res => {
+        setLeaves(res.data.leaves);
+        setFiltered(res.data.leaves);
+        setTotal(res.data.total);
+        setPage(res.data.page);
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Error applying filters:', err);
+        setError(err.response?.data?.message || 'Failed to apply filters.');
+      })
+      .finally(() => {
+        setLoading(false);
       });
-    }
-
-    if (filterSet.toDate) {
-      const to = new Date(filterSet.toDate);
-      data = data.filter(leave => {
-        const leaveTo = new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt);
-        return leaveTo <= to;
-      });
-    }
-
-    setFiltered(data);
   };
 
   const handleApproval = async (id, status, currentStage) => {
     try {
-      let nextStage = '';
-      if (currentStage === 'hod') nextStage = 'admin';
-      else if (currentStage === 'admin') nextStage = 'ceo';
-
-      const leaveData = { status, nextStage };
+      const leaveData = { status };
       await api.put(`/leaves/${id}/approve`, leaveData);
-      setLeaves(prev => prev.map(l => l._id === id ? { ...l, status: { ...l.status, [currentStage]: status, [nextStage]: 'Pending' } } : l));
-      setFiltered(prev => prev.map(l => l._id === id ? { ...l, status: { ...l.status, [currentStage]: status, [nextStage]: 'Pending' } } : l));
+      const updatedLeaves = leaves.map(l => {
+        if (l._id === id) {
+          const newStatus = { ...l.status, [currentStage]: status };
+          if (status === 'Approved') {
+            if (currentStage === 'hod') newStatus.admin = 'Pending';
+            else if (currentStage === 'admin') newStatus.ceo = 'Pending';
+          }
+          return { ...l, status: newStatus };
+        }
+        return l;
+      });
+      setLeaves(updatedLeaves);
+      setFiltered(updatedLeaves);
       alert(`Leave ${status.toLowerCase()} successfully.`);
     } catch (err) {
       console.error('Approval error:', err);
-      alert('Error processing leave approval.');
+      alert(`Error processing leave approval: ${err.response?.data?.message || err.message}`);
     }
+  };
+
+  const handlePageChange = ({ selected }) => {
+    const newPage = selected + 1;
+    setPage(newPage);
+    fetchLeaves(newPage);
   };
 
   return (
     <ContentLayout title="Leave List">
       <Card className="max-w-5xl mx-auto bg-white shadow-lg border-none">
         <CardContent className="p-6">
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+          <div className="flex justify-between mb-4">
+            <h2 className="text-lg font-semibold">Leave Records</h2>
+            <Button
+              onClick={() => fetchLeaves(1)}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {loading ? 'Loading...' : 'Refresh'}
+            </Button>
+          </div>
           {/* Filters */}
           <div className="flex flex-wrap gap-4 mb-6">
             {/* Leave Type Filter */}
@@ -121,6 +163,7 @@ function LeaveList() {
                 onValueChange={(value) => handleFilterChange('leaveType', value)}
                 value={filters.leaveType}
                 aria-label="Select leave type filter"
+                disabled={loading}
               >
                 <SelectTrigger id="leaveType" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                   <SelectValue placeholder="All" />
@@ -137,18 +180,19 @@ function LeaveList() {
             {/* Status Filter */}
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="status" className="text-sm font-medium text-gray-700">
-                Status
+                Approval Status (Any Stage)
               </Label>
               <Select
                 onValueChange={(value) => handleFilterChange('status', value)}
                 value={filters.status}
-                aria-label="Select status filter"
+                aria-label="Select approval status filter"
+                disabled={loading}
               >
                 <SelectTrigger id="status" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="Approved">Approved</SelectItem>
                   <SelectItem value="Rejected">Rejected</SelectItem>
@@ -157,7 +201,7 @@ function LeaveList() {
             </div>
 
             {/* From Date Filter */}
-            <div className="flex-1 min-w-[200px]">
+            {/* <div className="flex-1 min-w-[200px]">
               <Label htmlFor="fromDate" className="text-sm font-medium text-gray-700">
                 From Date
               </Label>
@@ -169,11 +213,12 @@ function LeaveList() {
                 onChange={(e) => handleFilterChange('fromDate', e.target.value)}
                 className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="From Date"
+                disabled={loading}
               />
-            </div>
+            </div> */}
 
             {/* To Date Filter */}
-            <div className="flex-1 min-w-[200px]">
+            {/* <div className="flex-1 min-w-[200px]">
               <Label htmlFor="toDate" className="text-sm font-medium text-gray-700">
                 To Date
               </Label>
@@ -185,8 +230,9 @@ function LeaveList() {
                 onChange={(e) => handleFilterChange('toDate', e.target.value)}
                 className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="To Date"
+                disabled={loading}
               />
-            </div>
+            </div> */}
           </div>
 
           {/* Table */}
@@ -196,6 +242,7 @@ function LeaveList() {
                 <TableRow className="border-b">
                   <TableHead className="font-semibold text-gray-700">Employee</TableHead>
                   <TableHead className="font-semibold text-gray-700">Type</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Category</TableHead>
                   <TableHead className="font-semibold text-gray-700">From</TableHead>
                   <TableHead className="font-semibold text-gray-700">To</TableHead>
                   <TableHead className="font-semibold text-gray-700">Status (HOD)</TableHead>
@@ -207,10 +254,19 @@ function LeaveList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 8 : 7}
+                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8}
+                      className="text-center text-gray-500 py-4"
+                    >
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8}
                       className="text-center text-gray-500 py-4"
                     >
                       No leave records found.
@@ -220,7 +276,10 @@ function LeaveList() {
                   filtered.map((leave) => (
                     <TableRow key={leave._id} className="hover:bg-gray-50">
                       <TableCell className="text-gray-700">{leave.name}</TableCell>
-                      <TableCell className="text-gray-700">{leave.leaveType}</TableCell>
+                      <TableCell className="text-gray-700">
+                        {leave.isCompensatory ? 'Compensatory' : leave.leaveType}
+                      </TableCell>
+                      <TableCell className="text-gray-700">{leave.category}</TableCell>
                       <TableCell className="text-gray-700">
                         {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
                       </TableCell>
@@ -239,7 +298,7 @@ function LeaveList() {
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                                 onClick={() => handleApproval(leave._id, 'Approved', 'hod')}
-                                disabled={leave.status.hod !== 'Pending'}
+                                disabled={loading || leave.status.hod !== 'Pending'}
                                 aria-label={`Approve leave for ${leave.name}`}
                               >
                                 Approve
@@ -249,7 +308,7 @@ function LeaveList() {
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
                                 onClick={() => handleApproval(leave._id, 'Rejected', 'hod')}
-                                disabled={leave.status.hod !== 'Pending'}
+                                disabled={loading || leave.status.hod !== 'Pending'}
                                 aria-label={`Reject leave for ${leave.name}`}
                               >
                                 Reject
@@ -263,7 +322,7 @@ function LeaveList() {
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                                 onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
-                                disabled={leave.status.admin !== 'Pending'}
+                                disabled={loading || leave.status.admin !== 'Pending'}
                                 aria-label={`Approve leave for ${leave.name}`}
                               >
                                 Approve
@@ -271,9 +330,9 @@ function LeaveList() {
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
+                                className="bg-red-600 hover:bg-blue-700 text-white"
                                 onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
-                                disabled={leave.status.admin !== 'Pending'}
+                                disabled={loading || leave.status.admin !== 'Pending'}
                                 aria-label={`Reject leave for ${leave.name}`}
                               >
                                 Reject
@@ -287,7 +346,7 @@ function LeaveList() {
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                                 onClick={() => handleApproval(leave._id, 'Approved', 'ceo')}
-                                disabled={leave.status.ceo !== 'Pending'}
+                                disabled={loading || leave.status.ceo !== 'Pending'}
                                 aria-label={`Approve leave for ${leave.name}`}
                               >
                                 Approve
@@ -297,7 +356,7 @@ function LeaveList() {
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
                                 onClick={() => handleApproval(leave._id, 'Rejected', 'ceo')}
-                                disabled={leave.status.ceo !== 'Pending'}
+                                disabled={loading || leave.status.ceo !== 'Pending'}
                                 aria-label={`Reject leave for ${leave.name}`}
                               >
                                 Reject
@@ -312,6 +371,23 @@ function LeaveList() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination */}
+          {total > limit && (
+            <ReactPaginate
+              previousLabel={'Previous'}
+              nextLabel={'Next'}
+              breakLabel={'...'}
+              pageCount={Math.ceil(total / limit)}
+              marginPagesDisplayed={2}
+              pageRangeDisplayed={5}
+              onPageChange={handlePageChange}
+              containerClassName={'pagination'}
+              activeClassName={'active'}
+              disabledClassName={'disabled'}
+              forcePage={page - 1}
+            />
+          )}
         </CardContent>
       </Card>
     </ContentLayout>

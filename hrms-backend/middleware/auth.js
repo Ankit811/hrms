@@ -20,11 +20,9 @@ const auth = (req, res, next) => {
     if (!decoded.id) {
       return res.status(403).json({ message: 'Invalid token: JWT payload missing id field' });
     }
-    // Rename loginType to role
     req.user = {
       ...decoded,
-      role: decoded.loginType, // Map loginType to role
-      loginType: undefined, // Remove loginType to avoid confusion
+      role: decoded.loginType, // Map loginType to role for role middleware
     };
     console.log('Decoded user:', req.user); // For debugging
     next();

@@ -16,7 +16,7 @@ require('dotenv').config();
 let gfs;
 const conn = mongoose.connection;
 conn.once('open', () => {
-  gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'uploads' });
+  gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'Uploads' });
 });
 
 // Configure Multer with GridFS Storage
@@ -69,6 +69,8 @@ const upload = multer({
 router.get('/', auth, role(['Admin', 'CEO']), async (req, res) => {
   try {
     const employees = await Employee.find().populate('department reportingManager');
+    console.log('Fetching employees for role:', req.user.role);
+    console.log('Employees found:', employees.length);
     res.json(employees);
   } catch (err) {
     console.error('Error fetching employees:', err);
@@ -81,9 +83,27 @@ router.get('/department', auth, role(['HOD']), async (req, res) => {
   try {
     const { employeeId } = req.user;
     const hod = await Employee.findOne({ employeeId }).populate('department');
+    if (!hod?.department?._id) {
+      return res.status(400).json({ message: 'HOD department not found' });
+    }
     const employees = await Employee.find({ department: hod.department._id }).populate('department reportingManager');
+    console.log('Fetching department employees for HOD:', hod.department._id);
+    console.log('Employees found:', employees.length);
     res.json(employees);
   } catch (err) {
+    console.error('Error fetching department employees:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Get all departments
+router.get('/departments', auth, role(['Admin', 'CEO']), async (req, res) => {
+  try {
+    const departments = await Department.find({}, '_id name');
+    console.log('Fetching departments:', departments.length);
+    res.json(departments);
+  } catch (err) {
+    console.error('Error fetching departments:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
@@ -463,7 +483,7 @@ router.delete('/:id', auth, role(['Admin']), async (req, res) => {
 // Get file by ID (e.g., profile picture or document)
 router.get('/files/:fileId', auth, async (req, res) => {
   try {
-    const file = await conn.db.collection('uploads.files').findOne({ _id: new mongoose.Types.ObjectId(req.params.fileId) });
+    const file = await conn.db.collection('Uploads.files').findOne({ _id: new mongoose.Types.ObjectId(req.params.fileId) });
     if (!file) return res.status(404).json({ message: 'File not found' });
 
     const downloadStream = gfs.openDownloadStream(new mongoose.Types.ObjectId(req.params.fileId));

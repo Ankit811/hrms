@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,6 +11,7 @@ import EmployeeDetails from './EmployeeDetails';
 import EmployeeUpdateForm from './EmployeeUpdateForm';
 
 function EmployeeList() {
+  console.log('EmployeeList component rendered');
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -29,23 +29,24 @@ function EmployeeList() {
       setError(null);
 
       try {
-        let userFetchError = false;
+        // Fetch user details
         const userRes = await api.get('/auth/me').catch(err => {
+          console.error('Error fetching user:', err.response?.data || err.message);
           if (err.response?.status === 401 || err.response?.status === 403) {
             localStorage.removeItem('token');
             navigate('/login');
             throw new Error('not_authenticated');
           }
-          userFetchError = true;
-          console.error('Error fetching user:', err);
-          return null;
+          throw new Error('Failed to fetch user details.');
         });
+        const userLoginType = userRes.data.loginType || '';
+        setRole(userLoginType);
+        console.log('User fetched:', userRes.data);
 
-        if (userRes) {
-          setRole(userRes.data.loginType || '');
-        }
-
-        const empRes = await api.get('/employees').catch(err => {
+        // Fetch employees based on role
+        const endpoint = userLoginType === 'HOD' ? '/employees/department' : '/employees';
+        const empRes = await api.get(endpoint).catch(err => {
+          console.error('Error fetching employees:', err.response?.data || err.message);
           if (err.response?.status === 401 || err.response?.status === 403) {
             localStorage.removeItem('token');
             navigate('/login');
@@ -54,24 +55,37 @@ function EmployeeList() {
           throw new Error('Failed to fetch employees. Please try again later.');
         });
         setEmployees(empRes.data);
+        console.log('Employees fetched:', empRes.data.map(emp => ({
+          employeeId: emp.employeeId,
+          name: emp.name,
+          department: emp.department,
+        })));
 
-        const deptRes = await api.get('/departments').catch(err => {
-          if (err.response?.status === 401 || err.response?.status === 403) {
-            localStorage.removeItem('token');
-            navigate('/login');
-            throw new Error('not_authenticated');
+        // Fetch departments (only for Admin and CEO)
+        if (['Admin', 'CEO'].includes(userLoginType)) {
+          try {
+            const deptRes = await api.get('/departments');
+            const validDepartments = deptRes.data.filter(dept => dept._id && dept.name.trim() !== '');
+            setDepartments(validDepartments);
+            console.log('Departments fetched:', validDepartments);
+          } catch (err) {
+            console.error('Error fetching departments:', err.response?.data || err.message);
+            if (err.response?.status === 401) {
+              localStorage.removeItem('token');
+              navigate('/login');
+              throw new Error('not_authenticated');
+            } else if (err.response?.status === 403) {
+              setError('Access denied: Cannot fetch departments. Department filter unavailable.');
+            } else {
+              setError('Failed to fetch departments. Department filter may be unavailable.');
+            }
           }
-          throw new Error('Failed to fetch departments. Please try again later.');
-        });
-        setDepartments(deptRes.data.filter(dept => dept._id && dept._id.trim() !== ''));
-
-        if (userFetchError) {
-          setError('Failed to fetch user details. Some features may be unavailable.');
         }
+
       } catch (err) {
         if (err.message !== 'not_authenticated') {
-          console.error('Error fetching data:', err);
-          setError(err.message || 'An unexpected error occurred. Please try again later.');
+          console.error('Fetch error:', err);
+          setError(err.message);
         }
       } finally {
         setLoading(false);
@@ -88,11 +102,26 @@ function EmployeeList() {
         emp.employeeId.toLowerCase().includes(search.toLowerCase())
       );
     }
-    if (departmentFilter && departmentFilter !== 'all') {
-      filtered = filtered.filter(emp => emp.department?._id === departmentFilter);
+    if (loginType !== 'HOD' && departmentFilter && departmentFilter !== 'all') {
+      filtered = filtered.filter(emp => {
+        if (!emp.department || !emp.department._id) {
+          console.log(`Employee ${emp.employeeId} has no department:`, emp.department);
+          return false;
+        }
+        const matchesDepartment = emp.department._id.toString() === departmentFilter;
+        if (!matchesDepartment) {
+          console.log(`Employee ${emp.employeeId} does not match department ${departmentFilter}:`, emp.department);
+        }
+        return matchesDepartment;
+      });
     }
+    console.log('Filtered employees:', filtered.map(emp => ({
+      employeeId: emp.employeeId,
+      name: emp.name,
+      department: emp.department,
+    })));
     return filtered;
-  }, [employees, search, departmentFilter]);
+  }, [employees, search, departmentFilter, loginType]);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this employee?')) return;
@@ -100,7 +129,7 @@ function EmployeeList() {
       await api.delete(`/employees/${id}`);
       setEmployees(employees.filter(emp => emp._id !== id));
     } catch (err) {
-      console.error('Error deleting employee:', err);
+      console.error('Error deleting employee:', err.response?.data || err.message);
       setError('Failed to delete employee. Please try again.');
     }
   };
@@ -119,6 +148,8 @@ function EmployeeList() {
     console.log('handleUpdateSuccess called, updatedEmployee:', updatedEmployee);
     setEmployees(employees.map(emp => emp._id === updatedEmployee._id ? updatedEmployee : emp));
   };
+
+  console.log('Rendering EmployeeList, loading:', loading, 'error:', error, 'employees:', employees.length);
 
   if (loading) {
     return (
@@ -144,103 +175,122 @@ function EmployeeList() {
     );
   }
 
-  return (
-    <ContentLayout title="Employee List">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-6xl mx-auto"
-      >
-        {error && (
-          <p className="text-yellow-500 mb-4">{error}</p>
-        )}
-        <div className="mb-6 flex flex-col md:flex-row gap-4">
-          <Input
-            placeholder="Search by name or ID"
-            value={search}
-            onChange={(e) => {
-              console.log('Search input changed:', e.target.value);
-              setSearch(e.target.value);
-            }}
-            className="max-w-sm"
-          />
-          <Select value={departmentFilter} onValueChange={(value) => {
-            console.log('Department filter changed:', value);
-            setDepartmentFilter(value);
-          }}>
-            <SelectTrigger className="max-w-sm">
-              <SelectValue placeholder="Filter by department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
-              {departments.map(dept => (
-                dept._id && <SelectItem key={dept._id} value={dept._id}>{dept.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Employee ID</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredEmployees.map(emp => (
-              <TableRow key={emp._id}>
-                <TableCell>{emp.employeeId}</TableCell>
-                <TableCell>{emp.name}</TableCell>
-                <TableCell>{emp.department?.name || 'N/A'}</TableCell>
-                <TableCell className="space-x-2">
-                  <Button
-                    onClick={() => handleViewDetails(emp)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    View
-                  </Button>
-                  {loginType === 'Admin' && (
-                    <>
-                      <EmployeeUpdateForm
-                        employee={emp}
-                        onUpdate={handleUpdateSuccess}
-                      />
+  try {
+    return (
+      <ContentLayout title="Employee List">
+        <div className="w-full max-w-6xl mx-auto">
+          {/* <p className="text-green-500">EmployeeList content is rendering</p> */}
+          {error && (
+            <p className="text-yellow-500 mb-4">{error}</p>
+          )}
+          <div className="mb-6 flex flex-col md:flex-row gap-4">
+            <Input
+              placeholder="Search by name or ID"
+              value={search}
+              onChange={(e) => {
+                console.log('Search input changed:', e.target.value);
+                setSearch(e.target.value);
+              }}
+              className="max-w-sm"
+            />
+            {loginType !== 'HOD' && (
+              <Select value={departmentFilter} onValueChange={(value) => {
+                console.log('Department filter changed:', value);
+                setDepartmentFilter(value);
+              }}>
+                <SelectTrigger className="max-w-sm">
+                  <SelectValue placeholder="Filter by department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {departments.map(dept => (
+                    dept._id && <SelectItem key={dept._id} value={dept._id}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          {filteredEmployees.length === 0 ? (
+            <div className="text-center py-8 bg-gray-100 rounded-lg">
+              <p className="text-lg font-semibold text-gray-700">No employees found.</p>
+              {departmentFilter !== 'all' && loginType !== 'HOD' && (
+                <p className="text-sm text-gray-500 mt-2">
+                  The selected department may not match any employees. Try selecting "All Departments".
+                </p>
+              )}
+              {filteredEmployees.length === 0 && employees.length > 0 && departmentFilter === 'all' && (
+                <p className="text-sm text-red-500 mt-2">
+                  Warning: Some employees may not have a valid department assigned.
+                </p>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEmployees.map(emp => (
+                  <TableRow key={emp._id}>
+                    <TableCell>{emp.employeeId}</TableCell>
+                    <TableCell>{emp.name}</TableCell>
+                    <TableCell>{emp.department?.name || 'N/A'}</TableCell>
+                    <TableCell className="space-x-2">
                       <Button
-                        onClick={() => handleDelete(emp._id)}
-                        className="bg-red-600 hover:bg-red-700"
+                        onClick={() => handleViewDetails(emp)}
+                        className="bg-blue-600 hover:bg-blue-700"
                       >
-                        Delete
+                        View
                       </Button>
-                    </>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {showDetails && selectedEmployeeForDetails && (
-          <EmployeeDetails
-            employee={selectedEmployeeForDetails}
-            onClose={handleCloseDetailsModal}
-            isAdmin={loginType === 'Admin'}
-            onLockToggle={async (section) => {
-              try {
-                const response = await api.patch(`/employees/${selectedEmployeeForDetails._id}/lock-section`, { section });
-                setSelectedEmployeeForDetails(response.data);
-                setEmployees(employees.map(emp => emp._id === response.data._id ? response.data : emp));
-              } catch (err) {
-                console.error('Error toggling section lock:', err);
-                setError('Failed to toggle section lock. Please try again.');
-              }
-            }}
-          />
-        )}
-      </motion.div>
-    </ContentLayout>
-  );
+                      {loginType === 'Admin' && (
+                        <>
+                          <EmployeeUpdateForm
+                            employee={emp}
+                            onUpdate={handleUpdateSuccess}
+                          />
+                          <Button
+                            onClick={() => handleDelete(emp._id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {showDetails && selectedEmployeeForDetails && (
+            <EmployeeDetails
+              employee={selectedEmployeeForDetails}
+              onClose={handleCloseDetailsModal}
+              isAdmin={loginType === 'Admin'}
+              onLockToggle={async (section) => {
+                try {
+                  const response = await api.patch(`/employees/${selectedEmployeeForDetails._id}/lock-section`, { section });
+                  setSelectedEmployeeForDetails(response.data);
+                  setEmployees(employees.map(emp => emp._id === response.data._id ? response.data : emp));
+                } catch (err) {
+                  console.error('Error toggling section lock:', err.response?.data || err.message);
+                  setError('Failed to toggle section lock. Please try again.');
+                }
+              }}
+            />
+          )}
+        </div>
+      </ContentLayout>
+    );
+  } catch (err) {
+    console.error('Rendering error in EmployeeList:', err);
+    return <div>Error rendering EmployeeList: {err.message}</div>;
+  }
 }
 
 export default EmployeeList;

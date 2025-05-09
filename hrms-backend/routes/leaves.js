@@ -11,11 +11,21 @@ const router = express.Router();
 router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
   try {
     const user = await Employee.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    if (!user.designation) {
+      return res.status(400).json({ message: 'Employee designation is required' });
+    }
+    if (!user.department) {
+      return res.status(400).json({ message: 'Employee department is required' });
+    }
+
     const leave = new Leave({
       employeeId: user.employeeId,
       employee: user._id,
       name: user.name,
-      position: user.position,
+      designation: user.designation,
       department: user.department,
       leaveType: req.body.leaveType,
       category: req.body.category,
@@ -29,28 +39,28 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
     });
 
     const leaveDays = req.body.halfDay ? 0.5 :
-    (req.body.fullDay?.to
-    ? ((new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
-    : 1);
+      (req.body.fullDay?.to
+        ? ((new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
+        : 1);
 
     if (req.body.leaveType === 'Paid' && user.paidLeaves < leaveDays && !req.body.isCompensatory) {
       return res.status(400).json({ message: 'Not enough paid leave balance' });
     }
+
     await leave.save();
 
     if (req.body.leaveType === 'Paid' && !req.body.isCompensatory) {
-      user.paidLeaves -= req.body.halfDay ? 0.5 : (req.body.fullDay.to ? (new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24) + 1 : 1);
+      user.paidLeaves -= leaveDays;
     } else if (req.body.leaveType === 'Unpaid') {
-      user.unpaidLeavesTaken += req.body.halfDay ? 0.5 : (req.body.fullDay.to ? (new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24) + 1 : 1);
+      user.unpaidLeavesTaken += leaveDays;
     }
 
     await user.save();
 
     const hod = await Employee.findOne({ department: user.department, loginType: 'HOD' });
     const admin = await Employee.findOne({ loginType: 'Admin' });
-    console.log(hod, admin);
 
-    if (hod && user.loginType !== 'HOD') {
+    if (hod && req.user.role !== 'HOD') {
       await Notification.create({ userId: hod.employeeId, message: `New leave request from ${user.name}` });
       if (global._io) global._io.to(hod.employeeId).emit('notification', { message: `New leave request from ${user.name}` });
     } else {
@@ -62,8 +72,8 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
 
     res.status(201).json(leave);
   } catch (err) {
-    console.warn('Leave submit error:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Leave submit error:', err.stack);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -71,23 +81,88 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
+    const { leaveType, status, fromDate, toDate, page = 1, limit = 10 } = req.query;
 
-    if (req.user.loginType === 'Employee') {
+    if (req.user.role === 'Employee') {
       filter = { employeeId: req.user.employeeId };
-    } else if (req.user.loginType === 'HOD') {
+    } else if (req.user.role === 'HOD') {
       const hod = await Employee.findOne({ employeeId: req.user.employeeId }).populate('department');
       if (!hod || !hod.department || !hod.department._id) {
         return res.status(400).json({ message: 'HOD has no valid department assigned' });
       }
-      filter = { department: hod.department._id, 'status.hod': 'Pending' };
-    } else if (req.user.loginType === 'Admin') {
-      filter = { 'status.hod': 'Approved', 'status.admin': 'Pending' };
-    } else if (req.user.loginType === 'CEO') {
-      filter = { 'status.admin': 'Approved', 'status.ceo': 'Pending' };
+      filter = { department: hod.department._id };
+      if (status && status !== 'all') {
+        filter.$or = [
+          { 'status.hod': status },
+          { 'status.admin': status },
+          { 'status.ceo': status }
+        ];
+      }
+    } else if (req.user.role === 'Admin') {
+      if (status && status !== 'all') {
+        filter.$or = [
+          { 'status.hod': status },
+          { 'status.admin': status },
+          { 'status.ceo': status }
+        ];
+      } else {
+        filter = {}; // Show all leaves for Admin when status is 'all'
+      }
+    } else if (req.user.role === 'CEO') {
+      if (status && status !== 'all') {
+        filter.$or = [
+          { 'status.hod': status },
+          { 'status.admin': status },
+          { 'status.ceo': status }
+        ];
+      } else {
+        filter = {}; // Show all leaves for CEO when status is 'all'
+      }
+    } else {
+      return res.status(403).json({ message: 'Unauthorized role' });
     }
 
-    const leaves = await Leave.find(filter).populate('department employee');
-    res.json(leaves);
+    // Apply additional query filters
+    if (leaveType && leaveType !== 'all') {
+      if (leaveType === 'Compensatory') {
+        filter.isCompensatory = true;
+      } else {
+        filter.leaveType = leaveType;
+      }
+    }
+
+    if (fromDate) {
+      filter.$or = filter.$or || [];
+      filter.$or.push(
+        { 'fullDay.from': { $gte: new Date(fromDate) } },
+        { 'halfDay.date': { $gte: new Date(fromDate) } },
+        { createdAt: { $gte: new Date(fromDate) } }
+      );
+    }
+
+    if (toDate) {
+      filter.$or = filter.$or || [];
+      filter.$or.push(
+        { 'fullDay.to': { $lte: new Date(toDate) } },
+        { 'halfDay.date': { $lte: new Date(toDate) } },
+        { createdAt: { $lte: new Date(toDate) } }
+      );
+    }
+
+    console.log('User role:', req.user.role, 'Employee ID:', req.user.employeeId);
+    console.log('Fetching leaves with filter:', filter);
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const leaves = await Leave.find(filter)
+      .populate('department employee')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await Leave.countDocuments(filter);
+
+    console.log('Leaves found:', leaves.length, 'Total:', total);
+
+    res.json({ leaves, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
     console.error('Error fetching leaves:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -105,8 +180,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     let nextStage = '';
     let approverMessage = '';
 
-    // Logic for HOD approval
-    if (req.user.loginType === 'HOD' && leave.status.hod === 'Pending') {
+    if (req.user.role === 'HOD' && leave.status.hod === 'Pending') {
       leave.status.hod = req.body.status;
       if (req.body.status === 'Approved') {
         nextStage = 'admin';
@@ -114,9 +188,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       } else {
         approverMessage = `Your leave request was rejected by HOD`;
       }
-
-    // Logic for Admin approval
-    } else if (req.user.loginType === 'Admin' && leave.status.admin === 'Pending') {
+    } else if (req.user.role === 'Admin' && leave.status.hod === 'Approved' && leave.status.admin === 'Pending') {
       leave.status.admin = req.body.status;
       if (req.body.status === 'Approved') {
         nextStage = 'ceo';
@@ -124,19 +196,15 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       } else {
         approverMessage = `Your leave request was rejected by Admin`;
       }
-
-    // Logic for CEO approval
-    } else if (req.user.loginType === 'CEO' && leave.status.ceo === 'Pending') {
+    } else if (req.user.role === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending') {
       leave.status.ceo = req.body.status;
       approverMessage = `Your leave request was ${req.body.status.toLowerCase()} by CEO`;
-
     } else {
       return res.status(403).json({ message: 'Not authorized to approve this leave' });
     }
 
     await leave.save();
 
-    // Send notifications to the employee and next approver if available
     await Notification.create({ userId: user.employeeId, message: approverMessage });
     if (global._io) global._io.to(user.employeeId).emit('notification', { message: approverMessage });
 
@@ -153,13 +221,12 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       }
     }
 
-    // Log the action in audit
     await Audit.create({ user: req.user.employeeId, action: `${req.body.status} Leave`, details: `${req.body.status} leave for ${leave.name}` });
 
     res.json(leave);
   } catch (err) {
-    console.error('Leave approval error:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Leave approval error:', err.stack);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 

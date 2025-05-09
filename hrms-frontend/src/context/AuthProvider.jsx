@@ -1,9 +1,7 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
-import { jwtDecode } from 'jwt-decode'; // Corrected import
-
-// Create the AuthContext
-export const AuthContext = createContext();
+import { jwtDecode } from 'jwt-decode';
+import { AuthContext } from './AuthContext';
 
 // AuthProvider to manage authentication state
 export const AuthProvider = ({ children }) => {
@@ -13,29 +11,34 @@ export const AuthProvider = ({ children }) => {
   // Helper function to check token expiration
   const isTokenExpired = (token) => {
     try {
-      const decoded = jwtDecode(token);  // Use jwtDecode
+      const decoded = jwtDecode(token);
       return decoded.exp * 1000 < Date.now();
     } catch (err) {
       return true;
     }
   };
 
+  // Fetch user details from /auth/me
+  const fetchUserDetails = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setUser(res.data);
+    } catch (err) {
+      console.error('Error fetching user details:', err.response?.data || err.message);
+      logout(); // Log out if fetching user details fails
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token && !isTokenExpired(token)) {
-      try {
-        const decoded = jwtDecode(token);  // Use jwtDecode
-        setUser({ id: decoded.id, loginType: decoded.loginType, name: decoded.name });
-        api.defaults.headers.Authorization = `Bearer ${token}`;
-      } catch (err) {
-        localStorage.removeItem('token');
-        console.error('Token decoding error:', err);
-      }
+      api.defaults.headers.Authorization = `Bearer ${token}`;
+      fetchUserDetails();
     } else {
       localStorage.removeItem('token'); // Remove expired or invalid token
     }
-    setLoading(false); // Stop loading once authentication check is done
-  }, []);
+    setLoading(false);
+  }, [fetchUserDetails]);
 
   // Login function to authenticate the user and set token
   const login = async (email, password) => {
@@ -45,6 +48,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', token);
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setUser(user);
+      // Fetch full user details after login
+      await fetchUserDetails();
       return user; // Return user data so caller can redirect correctly
     } catch (err) {
       console.error('Login error:', err);

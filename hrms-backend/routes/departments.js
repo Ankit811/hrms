@@ -6,7 +6,8 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
 
-router.get('/', auth, role(['Admin']), async (req, res) => {
+// Get all departments (allow Admin and CEO)
+router.get('/', auth, role(['Admin', 'CEO']), async (req, res) => {
   try {
     const departments = await Department.find();
     res.json(departments);
@@ -15,6 +16,7 @@ router.get('/', auth, role(['Admin']), async (req, res) => {
   }
 });
 
+// Create a department (Admin only)
 router.post('/', auth, role(['Admin']), async (req, res) => {
   try {
     const department = new Department({ name: req.body.name });
@@ -26,6 +28,7 @@ router.post('/', auth, role(['Admin']), async (req, res) => {
   }
 });
 
+// Update a department (Admin only)
 router.put('/:id', auth, role(['Admin']), async (req, res) => {
   try {
     const department = await Department.findById(req.params.id);
@@ -40,6 +43,7 @@ router.put('/:id', auth, role(['Admin']), async (req, res) => {
   }
 });
 
+// Delete a department (Admin only)
 router.delete('/:id', auth, role(['Admin']), async (req, res) => {
   try {
     const department = await Department.findById(req.params.id);

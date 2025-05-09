@@ -74,6 +74,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       id: user._id,
       loginType: user.loginType,
       name: user.name,
+      email: user.email, // Added email field
       employeeId: user.employeeId,
     });
   } catch (err) {
