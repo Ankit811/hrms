@@ -269,104 +269,109 @@ function Dashboard() {
 
   return (
     <ContentLayout title="Dashboard">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-blue-800">Total Employees</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-blue-600">{data.totalEmployees}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-green-50 to-green-100">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-green-800">Present Today</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-600">{data.presentToday}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-yellow-800">Pending Leaves</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-yellow-600">{data.pendingLeaves}</p>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Gender Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={genderData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  label
-                >
-                  {genderData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row justify-between items-center">
-            <CardTitle>Attendance ({attendanceView === 'monthly' ? 'Monthly' : 'Yearly'})</CardTitle>
-            <Select
-              value={attendanceView}
-              onValueChange={(value) => setAttendanceView(value)}
-              aria-label="Select attendance view"
-            >
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Monthly" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="yearly">Yearly</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={attendanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="count" stroke="#82ca9d" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Employees by Department</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={departmentData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col items-center w-full">
+        {/* First Three Boxes */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-[900px]">
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-blue-800 text-center">Total Employees</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-blue-600 text-center">{data.totalEmployees}</p>
+            </CardContent>
+          </Card>
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-green-800 text-center">Present Today</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-green-600 text-center">{data.presentToday}</p>
+            </CardContent>
+          </Card>
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-yellow-800 text-center">Pending Leaves</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-yellow-600 text-center">{data.pendingLeaves}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Graphs */}
+        <div className="mt-8 grid grid-cols-1 gap-6 w-full max-w-[900px]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gender Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <PieChart>
+                  <Pie
+                    data={genderData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={150}
+                    fill="#8884d8"
+                    label
+                  >
+                    {genderData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row justify-between items-center">
+              <CardTitle>Attendance ({attendanceView === 'monthly' ? 'Monthly' : 'Yearly'})</CardTitle>
+              <Select
+                value={attendanceView}
+                onValueChange={(value) => setAttendanceView(value)}
+                aria-label="Select attendance view"
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Monthly" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={attendanceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="count" stroke="#82ca9d" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Employees by Department</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={departmentData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#8884d8" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </ContentLayout>
   );

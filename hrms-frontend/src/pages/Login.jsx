@@ -78,7 +78,7 @@ function Login() {
           children="WELCOME TO HR MANAGEMENT SYSTEM"
           className="text-center text-4xl font-bold uppercase"
           style={{
-            background: 'linear-gradient(90deg, #000000, #1f2937)',
+            background: 'linear-gradient(90deg, #000000, #6b21a8, #ec4899)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}
@@ -94,8 +94,9 @@ function Login() {
       >
         <GlareCard className="relative z-10 w-full max-w-lg p-6">
           <ShineBorder
-            borderWidth={1.5}
+            borderWidth={2}
             duration={8}
+            shineColor={["#000000", "#6b21a8", "#ec4899"]}
           >
             {/* Wrapper to ensure ShineBorder visibility */}
             <div className="p-1">
