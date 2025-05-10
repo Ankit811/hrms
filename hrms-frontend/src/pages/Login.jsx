@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import logo from '../assets/logo1.png';
 import { RetroGrid } from '../components/magicui/RetroGrid';
-import { AnimatedGradientText } from '../components/magicui/AnimatedGradientText';
+import { TypingAnimation } from '../components/magicui/TypingAnimation';
 import { ShineBorder } from '../components/magicui/ShineBorder';
 import GlareCard from '../components/magicui/GlareCard';
 import { cn } from '../components/lib/utils';
@@ -57,7 +57,7 @@ function Login() {
       {/* Retro Grid Background */}
       <RetroGrid opacity={0.5} cellSize={80} color="#d1d5db" />
 
-      {/* Logo with Animation and Increased Gap */}
+      {/* Logo with Animation */}
       <motion.div
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -67,24 +67,26 @@ function Login() {
         <img src={logo} alt="Company Logo" className="w-48 h-auto" />
       </motion.div>
 
-      {/* Animated Text with Uppercase */}
+      {/* Typing Animation Text */}
       <motion.div
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, delay: 0.2 }}
         className="mb-8"
       >
-        <AnimatedGradientText
+        <TypingAnimation
+          children="WELCOME TO HR MANAGEMENT SYSTEM"
           className="text-center text-4xl font-bold uppercase"
-          colorFrom="#4f46e5"
-          colorTo="#ec4899"
-          speed={1.5}
-        >
-          Welcome to Accelor's HR Management System
-        </AnimatedGradientText>
+          style={{
+            background: 'linear-gradient(90deg, #000000, #1f2937)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+          duration={50}
+        />
       </motion.div>
 
-      {/* Login Card with Animation and Wider Width */}
+      {/* Login Card with Animation */}
       <motion.div
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -92,9 +94,8 @@ function Login() {
       >
         <GlareCard className="relative z-10 w-full max-w-lg p-6">
           <ShineBorder
-            borderWidth={1.25}
+            borderWidth={1.5}
             duration={8}
-            shineColor={["#4f46e5", "#a855f7", "#ec4899"]}
           >
             {/* Wrapper to ensure ShineBorder visibility */}
             <div className="p-1">
