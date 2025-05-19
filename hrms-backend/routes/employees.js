@@ -27,7 +27,7 @@ conn.once('open', () => {
 
 // Configure Multer with GridFS Storage (once at startup)
 const storage = new GridFsStorage({
-  url: process.env.MONGO_URI,
+  db: conn,
   options: {}, // Remove deprecated options
   file: (req, file) => {
     console.log('Processing file:', file);
