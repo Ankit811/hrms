@@ -1,5 +1,4 @@
-const soap = require('soap');
-const xml2js = require('xml2js');
+const sql = require('mssql');
 const RawPunchlog = require('../models/RawPunchlog');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
@@ -19,88 +18,51 @@ const syncAttendance = async () => {
 
     console.log(`Syncing attendance from ${fromDateTime} to ${toDateTime}`);
 
-    const url = 'http://www.iseorg.com:342/accelor/WebAPIService.asmx?WSDL';
-    const client = await soap.createClientAsync(url);
-
-    const args = {
-      FromDateTime: fromDateTime,
-      ToDateTime: toDateTime,
-      SerialNumber: 'QJT3243900243',
-      UserName: 'admin',
-      UserPassword: 'Admin@123',
-      strDataList: 'DetailedLogs',
+    // Database connection configuration
+    const dbConfig = {
+      user: 'essl',
+      password: 'essl',
+      server: 'DESKTOP-S41L8IE\\SQLEXPRESS',
+      database: 'etimetracklite1old',
+      options: {
+        trustServerCertificate: true, // For local development
+      },
+      driver: 'ODBC Driver 17 for SQL Server',
     };
 
-    console.log('SOAP request args:', args);
+    // Connect to the database
+    const pool = await sql.connect(dbConfig);
+    console.log('Connected to SQL Server database');
 
-    client.on('request', (xml) => console.log('Raw SOAP request:', xml));
-    client.on('response', (xml) => console.log('Raw SOAP response:', xml));
+    // Query to fetch punch logs
+    const query = `
+      SELECT UserID, LogDate, LogTime, Direction
+      FROM Punchlogs
+      WHERE LogDate BETWEEN @fromDate AND @toDate
+    `;
+    const request = pool.request();
+    request.input('fromDate', sql.DateTime, fromDate);
+    request.input('toDate', sql.DateTime, toDate);
 
-    const result = await client.GetTransactionsLogAsync(args);
-    const rawData = result[0]?.GetTransactionsLogResult;
-    const strDataList = result[0]?.strDataList;
+    const result = await request.query(query);
+    const rawData = result.recordset;
 
-    console.log('Raw SOAP response (GetTransactionsLogResult):', rawData);
-    console.log('strDataList:', strDataList);
+    console.log('Raw database response:', rawData);
 
-    if (!rawData && !strDataList) {
+    await pool.close();
+
+    if (!rawData || rawData.length === 0) {
       console.log('No transaction logs found.');
       return;
     }
 
-    if (rawData && rawData.includes('not valid date format')) {
-      console.log('Date format error in response:', rawData);
-      return;
-    }
-
-    let dataToParse = strDataList || rawData;
-    if (rawData && rawData.startsWith('Logs Count:')) {
-      dataToParse = strDataList;
-    }
-
-    if (!dataToParse) {
-      console.log('No data to parse.');
-      return;
-    }
-
-    let punchLogs = [];
-    if (!dataToParse.includes('<') && !dataToParse.includes(',')) {
-      const lines = dataToParse.split('\n').filter(line => line.trim() && !line.trim().startsWith('Logs Count:'));
-      console.log('Lines to parse:', lines);
-
-      punchLogs = lines.map((line, index) => {
-        const cleanedLine = line.replace(/[\t\r]/g, ' ').replace(/\s+/g, ' ').trim();
-        const parts = cleanedLine.match(/^(\S+)\s(.+)$/)?.slice(1);
-        console.log(`Line ${index}:`, parts);
-        if (!parts || parts.length !== 2) return null;
-        const userID = parts[0];
-        const timestamp = parts[1];
-        if (!timestamp || !/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}$/.test(timestamp)) return null;
-        const logDate = new Date(timestamp);
-        const logTime = timestamp.split(' ')[1];
-        return { UserID: userID, LogDate: logDate, LogTime: logTime, Direction: 'out' };
-      }).filter(log => log && log.UserID && log.LogTime && !isNaN(log.LogDate.getTime()));
-
-      punchLogs = [...new Map(punchLogs.map(log => [`${log.UserID}_${log.LogDate.toISOString()}`, log])).values()];
-    } else if (dataToParse.includes('<')) {
-      const parser = new xml2js.Parser();
-      const parsedResult = await parser.parseStringPromise(dataToParse);
-      console.log('Parsed XML result:', JSON.stringify(parsedResult, null, 2));
-      punchLogs = parsedResult['TransactionLog']?.map(log => ({
-        UserID: log.UserID[0],
-        LogDate: new Date(log.LogDate[0]),
-        LogTime: log.LogTime[0],
-        Direction: log.Direction[0] || 'out',
-      })) || [];
-    } else if (dataToParse.includes(',')) {
-      punchLogs = dataToParse.split('\n').map(line => {
-        const [UserID, LogDate, LogTime, Direction] = line.split(',');
-        return { UserID, LogDate: new Date(LogDate), LogTime, Direction: Direction || 'out' };
-      }).filter(log => log.UserID);
-    } else {
-      console.log('Unsupported or unparsed response format:', dataToParse);
-      return;
-    }
+    // Map database results to punchLogs format
+    let punchLogs = rawData.map(log => ({
+      UserID: log.UserID,
+      LogDate: new Date(log.LogDate),
+      LogTime: log.LogTime,
+      Direction: log.Direction || 'out',
+    }));
 
     console.log('Raw punch logs to store:', punchLogs);
 

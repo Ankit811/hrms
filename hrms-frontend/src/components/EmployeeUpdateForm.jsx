@@ -114,9 +114,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
   }, []);
 
   useEffect(() => {
-  }, [isOpen]);
-
-  useEffect(() => {
     if (step === 5) {
       const timer = setTimeout(() => {
         setAllowSubmit(true);
@@ -130,10 +127,8 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
   useEffect(() => {
     if (submitButtonRef.current) {
       const button = submitButtonRef.current;
-      const handleFocus = () => {
-      };
-      const handleClick = () => {
-      };
+      const handleFocus = () => {};
+      const handleClick = () => {};
       button.addEventListener('focus', handleFocus);
       button.addEventListener('click', handleClick);
       return () => {
@@ -250,8 +245,18 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         'medicalCertificate', 'backgroundVerification'
       ];
       fileFields.forEach(field => {
-        if (files[field] && files[field].type !== 'application/pdf') {
-          newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
+        if (files[field]) {
+          if (field === 'profilePicture') {
+            if (!['image/jpeg', 'image/jpg'].includes(files[field].type)) {
+              newErrors[field] = 'Profile Picture must be a JPEG/JPG image';
+            } else if (files[field].size > 5 * 1024 * 1024) {
+              newErrors[field] = 'Profile Picture must be less than or equal to 5MB';
+            }
+          } else {
+            if (files[field].type !== 'application/pdf') {
+              newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
+            }
+          }
         }
       });
     } else if (currentStep === 5) {
@@ -259,7 +264,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         newErrors.paymentType = 'Payment Type is required';
       }
       if (form.paymentType === 'Bank Transfer') {
-        const bankFields = ['bankName', 'bankBranch', 'accountNumber', 'ifscCode'];
+        const bankFields = ['bankName', 'bankBranch', 'bankBranch', 'ifscCode'];
         bankFields.forEach(field => {
           if (!form[field] || form[field].trim() === '') {
             newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
@@ -312,8 +317,10 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
 
     setLoading(true);
     const formData = new FormData();
+    // Ensure employeeId is included
+    formData.append('employeeId', form.employeeId);
     Object.keys(form).forEach(key => {
-      if (form[key] && form[key] !== null) {
+      if (form[key] && form[key] !== null && key !== 'employeeId') {
         formData.append(key, form[key]);
       }
     });
@@ -322,6 +329,11 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         formData.append(key, files[key]);
       }
     });
+
+    // Log FormData contents for debugging
+    for (let [key, value] of formData.entries()) {
+      console.log(`FormData: ${key} =`, value);
+    }
 
     try {
       const response = await api.put(`/employees/${employee._id}`, formData, {
@@ -416,7 +428,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.fatherName ? 'border-red-500' : ''}
                 />
-                {errors.fatherName && <p className="mt-1 text.sm text-red-500">{errors.fatherName}</p>}
+                {errors.fatherName && <p className="mt-1 text-sm text-red-500">{errors.fatherName}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Mother Name:</strong>
@@ -426,7 +438,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.motherName ? 'border-red-500' : ''}
                 />
-                {errors.motherName && <p className="mt-1 text.sm text-red-500">{errors.motherName}</p>}
+                {errors.motherName && <p className="mt-1 text-sm text-red-500">{errors.motherName}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Mobile Number:</strong>
@@ -436,7 +448,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.mobileNumber ? 'border-red-500' : ''}
                 />
-                {errors.mobileNumber && <p className="mt-1 text.sm text-red-500">{errors.mobileNumber}</p>}
+                {errors.mobileNumber && <p className="mt-1 text-sm text-red-500">{errors.mobileNumber}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Permanent Address:</strong>
@@ -446,7 +458,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.permanentAddress ? 'border-red-500' : ''}
                 />
-                {errors.permanentAddress && <p className="mt-1 text.sm text-red-500">{errors.permanentAddress}</p>}
+                {errors.permanentAddress && <p className="mt-1 text-sm text-red-500">{errors.permanentAddress}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Current Address:</strong>
@@ -456,7 +468,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.currentAddress ? 'border-red-500' : ''}
                 />
-                {errors.currentAddress && <p className="mt-1 text.sm text-red-500">{errors.currentAddress}</p>}
+                {errors.currentAddress && <p className="mt-1 text-sm text-red-500">{errors.currentAddress}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Email:</strong>
@@ -467,7 +479,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.email ? 'border-red-500' : ''}
                 />
-                {errors.email && <p className="mt-1 text.sm text-red-500">{errors.email}</p>}
+                {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Password:</strong>
@@ -478,7 +490,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.password ? 'border-red-500' : ''}
                 />
-                {errors.password && <p className="mt-1 text.sm text-red-500">{errors.password}</p>}
+                {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Aadhar Number:</strong>
@@ -488,7 +500,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.aadharNumber ? 'border-red-500' : ''}
                 />
-                {errors.aadharNumber && <p className="mt-1 text.sm text-red-500">{errors.aadharNumber}</p>}
+                {errors.aadharNumber && <p className="mt-1 text-sm text-red-500">{errors.aadharNumber}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Gender:</strong>
@@ -502,7 +514,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.gender && <p className="mt-1 text.sm text-red-500">{errors.gender}</p>}
+                {errors.gender && <p className="mt-1 text-sm text-red-500">{errors.gender}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Marital Status:</strong>
@@ -515,7 +527,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="Married">Married</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.maritalStatus && <p className="mt-1 text.sm text-red-500">{errors.maritalStatus}</p>}
+                {errors.maritalStatus && <p className="mt-1 text-sm text-red-500">{errors.maritalStatus}</p>}
               </div>
               {form.maritalStatus === 'Married' && (
                 <div className="flex flex-col">
@@ -526,7 +538,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     onChange={handleChange}
                     className={errors.spouseName ? 'border-red-500' : ''}
                   />
-                  {errors.spouseName && <p className="mt-1 text.sm text-red-500">{errors.spouseName}</p>}
+                  {errors.spouseName && <p className="mt-1 text-sm text-red-500">{errors.spouseName}</p>}
                 </div>
               )}
               <div className="flex flex-col">
@@ -537,7 +549,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.emergencyContactName ? 'border-red-500' : ''}
                 />
-                {errors.emergencyContactName && <p className="mt-1 text.sm text-red-500">{errors.emergencyContactName}</p>}
+                {errors.emergencyContactName && <p className="mt-1 text-sm text-red-500">{errors.emergencyContactName}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Emergency Contact Number:</strong>
@@ -547,7 +559,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.emergencyContactNumber ? 'border-red-500' : ''}
                 />
-                {errors.emergencyContactNumber && <p className="mt-1 text.sm text-red-500">{errors.emergencyContactNumber}</p>}
+                {errors.emergencyContactNumber && <p className="mt-1 text-sm text-red-500">{errors.emergencyContactNumber}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Date of Joining:</strong>
@@ -558,7 +570,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.dateOfJoining ? 'border-red-500' : ''}
                 />
-                {errors.dateOfJoining && <p className="mt-1 text.sm text-red-500">{errors.dateOfJoining}</p>}
+                {errors.dateOfJoining && <p className="mt-1 text-sm text-red-500">{errors.dateOfJoining}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Reporting Manager:</strong>
@@ -572,7 +584,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.reportingManager && <p className="mt-1 text.sm text-red-500">{errors.reportingManager}</p>}
+                {errors.reportingManager && <p className="mt-1 text-sm text-red-500">{errors.reportingManager}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Status:</strong>
@@ -585,7 +597,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="Probation">Probation</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.status && <p className="mt-1 text.sm text-red-500">{errors.status}</p>}
+                {errors.status && <p className="mt-1 text-sm text-red-500">{errors.status}</p>}
               </div>
               {form.status === 'Probation' && (
                 <>
@@ -597,7 +609,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       onChange={handleChange}
                       className={errors.probationPeriod ? 'border-red-500' : ''}
                     />
-                    {errors.probationPeriod && <p className="mt-1 text.sm text-red-500">{errors.probationPeriod}</p>}
+                    {errors.probationPeriod && <p className="mt-1 text-sm text-red-500">{errors.probationPeriod}</p>}
                   </div>
                   <div className="flex flex-col">
                     <strong className="mb-1">Confirmation Date:</strong>
@@ -608,7 +620,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       onChange={handleChange}
                       className={errors.confirmationDate ? 'border-red-500' : ''}
                     />
-                    {errors.confirmationDate && <p className="mt-1 text.sm text-red-500">{errors.confirmationDate}</p>}
+                    {errors.confirmationDate && <p className="mt-1 text-sm text-red-500">{errors.confirmationDate}</p>}
                   </div>
                 </>
               )}
@@ -620,7 +632,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.referredBy ? 'border-red-500' : ''}
                 />
-                {errors.referredBy && <p className="mt-1 text.sm text-red-500">{errors.referredBy}</p>}
+                {errors.referredBy && <p className="mt-1 text-sm text-red-500">{errors.referredBy}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Login Type:</strong>
@@ -635,7 +647,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="CEO">CEO</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.loginType && <p className="mt-1 text.sm text-red-500">{errors.loginType}</p>}
+                {errors.loginType && <p className="mt-1 text-sm text-red-500">{errors.loginType}</p>}
               </div>
             </div>
           )}
@@ -649,7 +661,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.designation ? 'border-red-500' : ''}
                 />
-                {errors.designation && <p className="mt-1 text.sm text-red-500">{errors.designation}</p>}
+                {errors.designation && <p className="mt-1 text-sm text-red-500">{errors.designation}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Location:</strong>
@@ -659,7 +671,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.location ? 'border-red-500' : ''}
                 />
-                {errors.location && <p className="mt-1 text.sm text-red-500">{errors.location}</p>}
+                {errors.location && <p className="mt-1 text-sm text-red-500">{errors.location}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Department:</strong>
@@ -673,7 +685,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.department && <p className="mt-1 text.sm text-red-500">{errors.department}</p>}
+                {errors.department && <p className="mt-1 text-sm text-red-500">{errors.department}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">Employee Type:</strong>
@@ -686,7 +698,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="Staff">Staff</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.employeeType && <p className="mt-1 text.sm text-red-500">{errors.employeeType}</p>}
+                {errors.employeeType && <p className="mt-1 text-sm text-red-500">{errors.employeeType}</p>}
               </div>
             </div>
           )}
@@ -700,7 +712,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.panNumber ? 'border-red-500' : ''}
                 />
-                {errors.panNumber && <p className="mt-1 text.sm text-red-500">{errors.panNumber}</p>}
+                {errors.panNumber && <p className="mt-1 text-sm text-red-500">{errors.panNumber}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">PF Number:</strong>
@@ -710,7 +722,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.pfNumber ? 'border-red-500' : ''}
                 />
-                {errors.pfNumber && <p className="mt-1 text.sm text-red-500">{errors.pfNumber}</p>}
+                {errors.pfNumber && <p className="mt-1 text-sm text-red-500">{errors.pfNumber}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">UAN Number:</strong>
@@ -720,7 +732,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.uanNumber ? 'border-red-500' : ''}
                 />
-                {errors.uanNumber && <p className="mt-1 text.sm text-red-500">{errors.uanNumber}</p>}
+                {errors.uanNumber && <p className="mt-1 text-sm text-red-500">{errors.uanNumber}</p>}
               </div>
               <div className="flex flex-col">
                 <strong className="mb-1">ESI Number:</strong>
@@ -730,7 +742,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   onChange={handleChange}
                   className={errors.esiNumber ? 'border-red-500' : ''}
                 />
-                {errors.esiNumber && <p className="mt-1 text.sm text-red-500">{errors.esiNumber}</p>}
+                {errors.esiNumber && <p className="mt-1 text-sm text-red-500">{errors.esiNumber}</p>}
               </div>
             </div>
           )}
@@ -754,7 +766,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   <Input
                     name={doc.id}
                     type="file"
-                    accept="application/pdf"
+                    accept={doc.id === 'profilePicture' ? 'image/jpeg,image/jpg' : 'application/pdf'}
                     onChange={handleFileChange}
                     className={errors[doc.id] ? 'border-red-500' : ''}
                   />
@@ -768,7 +780,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       View
                     </a>
                   )}
-                  {errors[doc.id] && <p className="mt-1 text.sm text-red-500">{errors[doc.id]}</p>}
+                  {errors[doc.id] && <p className="mt-1 text-sm text-red-500">{errors[doc.id]}</p>}
                 </div>
               ))}
             </div>
@@ -790,7 +802,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.paymentType && <p className="mt-1 text.sm text-red-500">{errors.paymentType}</p>}
+                {errors.paymentType && <p className="mt-1 text-sm text-red-500">{errors.paymentType}</p>}
               </div>
               {form.paymentType === 'Bank Transfer' && (
                 <>
@@ -802,7 +814,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       onChange={handleChange}
                       className={errors.bankName ? 'border-red-500' : ''}
                     />
-                    {errors.bankName && <p className="mt-1 text.sm text-red-500">{errors.bankName}</p>}
+                    {errors.bankName && <p className="mt-1 text-sm text-red-500">{errors.bankName}</p>}
                   </div>
                   <div className="flex flex-col">
                     <strong className="mb-1">Bank Branch:</strong>
@@ -812,7 +824,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       onChange={handleChange}
                       className={errors.bankBranch ? 'border-red-500' : ''}
                     />
-                    {errors.bankBranch && <p className="mt-1 text.sm text-red-500">{errors.bankBranch}</p>}
+                    {errors.bankBranch && <p className="mt-1 text-sm text-red-500">{errors.bankBranch}</p>}
                   </div>
                   <div className="flex flex-col">
                     <strong className="mb-1">Account Number:</strong>
@@ -822,7 +834,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       onChange={handleChange}
                       className={errors.accountNumber ? 'border-red-500' : ''}
                     />
-                    {errors.accountNumber && <p className="mt-1 text.sm text-red-500">{errors.accountNumber}</p>}
+                    {errors.accountNumber && <p className="mt-1 text-sm text-red-500">{errors.accountNumber}</p>}
                   </div>
                   <div className="flex flex-col">
                     <strong className="mb-1">IFSC Code:</strong>
@@ -832,7 +844,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                       onChange={handleChange}
                       className={errors.ifscCode ? 'border-red-500' : ''}
                     />
-                    {errors.ifscCode && <p className="mt-1 text.sm text-red-500">{errors.ifscCode}</p>}
+                    {errors.ifscCode && <p className="mt-1 text-sm text-red-500">{errors.ifscCode}</p>}
                   </div>
                 </>
               )}

@@ -21,26 +21,24 @@ const server = http.createServer(app);
 // Define allowed origins
 const allowedOrigins = [
   'http://localhost:5173', // Vite frontend (development)
-  'http://localhost:3000', // Previous frontend (optional, if still needed)
-  // Add production frontend URL here, e.g., 'https://your-frontend-domain.com'
+  'http://localhost:3000', // Previous frontend (optional)
+  // Add production frontend URL here
 ];
 
 // Configure CORS for Express
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g., mobile apps, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
     }
+    return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], // Added PATCH
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For multipart/form-data
 
 // Configure CORS for Socket.IO
 const io = new Server(server, {
@@ -71,20 +69,23 @@ mongoose.connect(process.env.MONGO_URI)
     console.log('MongoDB connected');
     syncAttendance();
     setInterval(syncAttendance, 24 * 60 * 60 * 1000);
+
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  });
 
 io.on('connection', socket => {
   console.log('User connected:', socket.id);
 
   socket.on('join', userId => {
-    socket.join(userId); // Join user's personal room
+    socket.join(userId);
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
 });
-
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

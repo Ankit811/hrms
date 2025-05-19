@@ -172,16 +172,30 @@ function EmployeeForm() {
       if (form.esiNumber && !/^\d{12}$/.test(form.esiNumber)) {
         newErrors.esiNumber = 'ESI Number must be 12 digits';
       }
-    } 
-    // else if (step === 4) {
-    //   const requiredFiles = ['tenthTwelfthDocs', 'graduationDocs', 'panCard', 'aadharCard', 'bankPassbook', 'medicalCertificate', 'backgroundVerification'];
-    //   requiredFiles.forEach(field => {
-    //     if (!files[field]) {
-    //       newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
-    //     }
-    //   });
-    // } 
-    else if (step === 5) {
+    } else if (step === 4) {
+      // const requiredFiles = ['tenthTwelfthDocs', 'graduationDocs', 'panCard', 'aadharCard', 'bankPassbook', 'medicalCertificate', 'backgroundVerification'];
+      // requiredFiles.forEach(field => {
+      //   if (!files[field]) {
+      //     newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
+      //   }
+      // });
+      // if (files.experienceCertificate && !files.salarySlips) {
+      //   newErrors.salarySlips = 'Last 3 Months Salary Slips is required';
+      // }
+      // Object.keys(files).forEach(field => {
+      //   if (files[field] && files[field].type !== 'application/pdf') {
+      //     newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
+      //   }
+      // });
+      if (files.profilePicture) {
+        if (files.profilePicture.type !== 'image/jpeg') {
+          newErrors.profilePicture = 'Profile Picture must be a JPEG image';
+        }
+        if (files.profilePicture.size > 5 * 1024 * 1024) {
+          newErrors.profilePicture = 'Profile Picture must be less than 5MB';
+        }
+      }
+    } else if (step === 5) {
       if (!form.paymentType) {
         newErrors.paymentType = 'Payment Type is required';
       }
@@ -492,15 +506,16 @@ function EmployeeForm() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { id: 'tenthTwelfthDocs', label: '10th & 12th Certificates (PDF, 5MB)', maxSize: '5MB' },
-              { id: 'graduationDocs', label: 'Graduation Certificates (PDF, 5MB)', maxSize: '5MB' },
-              { id: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates (PDF, 5MB, Optional)', maxSize: '5MB' },
-              { id: 'experienceCertificate', label: 'Experience Certificate (PDF, 5MB, Optional)', maxSize: '5MB' },
-              { id: 'panCard', label: 'PAN Card (PDF, 1MB)', maxSize: '1MB' },
-              { id: 'aadharCard', label: 'Aadhar Card (PDF, 1MB)', maxSize: '1MB' },
-              { id: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque (PDF, 1MB)', maxSize: '1MB' },
-              { id: 'medicalCertificate', label: 'Medical Fitness Certificate (PDF, 2MB)', maxSize: '2MB' },
-              { id: 'backgroundVerification', label: 'Background Verification (PDF, 2MB)', maxSize: '2MB' },
+              { id: 'tenthTwelfthDocs', label: '10th & 12th Certificates', maxSize: '5MB' },
+              { id: 'graduationDocs', label: 'Graduation Certificates', maxSize: '5MB' },
+              { id: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates (Optional)', maxSize: '5MB' },
+              { id: 'experienceCertificate', label: 'Experience Certificate (Optional)', maxSize: '5MB' },
+              { id: 'salarySlips', label: 'Last 3 Months Salary Slips', maxSize: '1MB' },
+              { id: 'panCard', label: 'PAN Card', maxSize: '1MB' },
+              { id: 'aadharCard', label: 'Aadhar Card', maxSize: '1MB' },
+              { id: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque', maxSize: '1MB' },
+              { id: 'medicalCertificate', label: 'Medical Fitness Certificate', maxSize: '2MB' },
+              { id: 'backgroundVerification', label: 'Background Verification', maxSize: '2MB' },
             ].map((field, index) => (
               <motion.div
                 key={field.id}
@@ -522,31 +537,13 @@ function EmployeeForm() {
                 {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
               </motion.div>
             ))}
-            {files.experienceCertificate && (
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.45 }}
-              >
-                <Label htmlFor="salarySlips">Last 3 Months Salary Slips (PDF, 1MB)</Label>
-                <Input
-                  id="salarySlips"
-                  name="salarySlips"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileChange}
-                  className={errors.salarySlips ? 'border-red-500' : ''}
-                  required
-                />
-                {errors.salarySlips && <p className="mt-1 text-sm text-red-500">{errors.salarySlips}</p>}
-              </motion.div>
-            )}
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.50 }}>
               <Label htmlFor="profilePicture">Profile Picture</Label>
               <Input
                 id="profilePicture"
                 name="profilePicture"
                 type="file"
+                accept="image/jpeg"
                 onChange={handleFileChange}
                 className={errors.profilePicture ? 'border-red-500' : ''}
               />

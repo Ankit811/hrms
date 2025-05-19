@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TextField, Grid, Button } from '@mui/material';
+import { motion } from 'framer-motion';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
@@ -10,19 +14,80 @@ function Profile() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [profile, setProfile] = useState({
+    employeeId: '',
+    userId: '',
     name: '',
     dateOfBirth: '',
+    fatherName: '',
+    motherName: '',
     mobileNumber: '',
     permanentAddress: '',
+    currentAddress: '',
+    email: '',
     aadharNumber: '',
+    gender: '',
+    maritalStatus: '',
+    spouseName: '',
+    emergencyContactName: '',
+    emergencyContactNumber: '',
     dateOfJoining: '',
-    department: '',
-    designation: '',
+    reportingManager: { name: '' },
+    status: '',
+    probationPeriod: '',
+    confirmationDate: '',
+    referredBy: '',
     loginType: '',
+    designation: '',
+    location: '',
+    department: { name: '' },
+    employeeType: '',
+    panNumber: '',
+    pfNumber: '',
+    uanNumber: '',
+    esiNumber: '',
+    documents: [],
+    profilePicture: '',
+    paymentType: '',
+    bankDetails: {
+      bankName: '',
+      bankBranch: '',
+      accountNumber: '',
+      ifscCode: '',
+    },
+  });
+  const [files, setFiles] = useState({
+    profilePicture: null,
+    tenthTwelfthDocs: null,
+    graduationDocs: null,
+    postgraduationDocs: null,
+    experienceCertificate: null,
+    salarySlips: null,
+    panCard: null,
+    aadharCard: null,
+    bankPassbook: null,
+    medicalCertificate: null,
+    backgroundVerification: null,
   });
   const [isLocked, setIsLocked] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [fileErrors, setFileErrors] = useState({});
+  const [step, setStep] = useState(1);
+
+  const lockedFields = [
+    'employeeId',
+    'userId',
+    'dateOfJoining',
+    'reportingManager.name',
+    'status',
+    'probationPeriod',
+    'confirmationDate',
+    'loginType',
+    'referredBy',
+    'designation',
+    'department.name',
+    'paymentType',
+  ];
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -32,15 +97,46 @@ function Profile() {
       try {
         const res = await api.get(`/employees/${user.id}`);
         setProfile({
+          employeeId: res.data.employeeId || '',
+          userId: res.data.userId || '',
           name: res.data.name || '',
           dateOfBirth: res.data.dateOfBirth ? new Date(res.data.dateOfBirth).toISOString().split('T')[0] : '',
+          fatherName: res.data.fatherName || '',
+          motherName: res.data.motherName || '',
           mobileNumber: res.data.mobileNumber || '',
           permanentAddress: res.data.permanentAddress || '',
+          currentAddress: res.data.currentAddress || '',
+          email: res.data.email || '',
           aadharNumber: res.data.aadharNumber || '',
+          gender: res.data.gender || '',
+          maritalStatus: res.data.maritalStatus || '',
+          spouseName: res.data.spouseName || '',
+          emergencyContactName: res.data.emergencyContactName || '',
+          emergencyContactNumber: res.data.emergencyContactNumber || '',
           dateOfJoining: res.data.dateOfJoining ? new Date(res.data.dateOfJoining).toISOString().split('T')[0] : '',
-          department: res.data.department?.name || '',
-          designation: res.data.designation || '',
+          reportingManager: res.data.reportingManager || { name: '' },
+          status: res.data.status || '',
+          probationPeriod: res.data.probationPeriod || '',
+          confirmationDate: res.data.confirmationDate ? new Date(res.data.confirmationDate).toISOString().split('T')[0] : '',
+          referredBy: res.data.referredBy || '',
           loginType: res.data.loginType || '',
+          designation: res.data.designation || '',
+          location: res.data.location || '',
+          department: res.data.department || { name: '' },
+          employeeType: res.data.employeeType || '',
+          panNumber: res.data.panNumber || '',
+          pfNumber: res.data.pfNumber || '',
+          uanNumber: res.data.uanNumber || '',
+          esiNumber: res.data.esiNumber || '',
+          documents: res.data.documents || [],
+          profilePicture: res.data.profilePicture || '',
+          paymentType: res.data.paymentType || '',
+          bankDetails: res.data.bankDetails || {
+            bankName: '',
+            bankBranch: '',
+            accountNumber: '',
+            ifscCode: '',
+          },
         });
         setIsLocked(res.data.locked || false);
       } catch (err) {
@@ -64,18 +160,648 @@ function Profile() {
   }, [user, navigate]);
 
   const handleChange = (e) => {
-    setProfile({ ...profile, [e.target.name]: e.target.value });
+    const { name, value, files: fileList } = e.target;
+    if (fileList && fileList[0]) {
+      setFiles({ ...files, [name]: fileList[0] });
+      setFileErrors({ ...fileErrors, [name]: '' });
+    } else if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setProfile({
+        ...profile,
+        [parent]: { ...profile[parent], [child]: value },
+      });
+    } else {
+      setProfile({ ...profile, [name]: value });
+    }
   };
 
-  const handleSubmit = (e) => {
+  const validateFiles = () => {
+    const newErrors = {};
+    const requiredFiles = [
+      'tenthTwelfthDocs',
+      'graduationDocs',
+      'panCard',
+      'aadharCard',
+      'bankPassbook',
+      'medicalCertificate',
+      'backgroundVerification',
+    ];
+    requiredFiles.forEach((field) => {
+      if (!profile.documents.includes(field) && !files[field]) {
+        newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
+      }
+    });
+    if (files.salarySlips && !files.experienceCertificate && !profile.documents.includes('experienceCertificate')) {
+      newErrors.salarySlips = 'Experience Certificate is required before uploading Salary Slips';
+    }
+    setFileErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (isLocked) {
       alert('Profile is locked. Contact Admin to edit.');
       return;
     }
-    api.put(`/employees/${user.id}`, profile)
-      .then(res => alert('Profile updated successfully'))
-      .catch(err => alert('Failed to update profile: ' + (err.response?.data?.message || err.message)));
+
+    if (!profile.name || !profile.mobileNumber) {
+      alert('Name and Mobile Number are required.');
+      return;
+    }
+
+    if (step === 4 && !validateFiles()) {
+      return;
+    }
+
+    setLoading(true);
+    const formData = new FormData();
+    Object.keys(profile).forEach((key) => {
+      if (key === 'department' || key === 'reportingManager' || key === 'bankDetails') {
+        formData.append(key, JSON.stringify(profile[key]));
+      } else if (key !== 'documents' && profile[key]) {
+        formData.append(key, profile[key]);
+      }
+    });
+    Object.keys(files).forEach((key) => {
+      if (files[key]) formData.append(key, files[key]);
+    });
+
+    try {
+      const res = await api.put(`/employees/${user.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const successMessage = res.data.message || 'Profile updated successfully';
+      alert(successMessage);
+      setProfile({
+        ...profile,
+        ...res.data,
+        department: res.data.department || profile.department,
+        reportingManager: res.data.reportingManager || profile.reportingManager,
+        bankDetails: res.data.bankDetails || profile.bankDetails,
+        documents: res.data.documents || profile.documents,
+        profilePicture: res.data.profilePicture || profile.profilePicture,
+      });
+      setFiles({
+        profilePicture: null,
+        tenthTwelfthDocs: null,
+        graduationDocs: null,
+        postgraduationDocs: null,
+        experienceCertificate: null,
+        salarySlips: null,
+        panCard: null,
+        aadharCard: null,
+        bankPassbook: null,
+        medicalCertificate: null,
+        backgroundVerification: null,
+      });
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Failed to update profile. Please try again.';
+      alert(errorMessage);
+      console.error('Error updating profile:', err.response?.data || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStep = () => {
+    switch (step) {
+      case 1:
+        return (
+          <>
+            <div className="flex justify-center mb-4">
+              <img
+                src={profile.profilePicture ? `/api/employees/files/${profile.profilePicture}` : 'https://via.placeholder.com/96?text=User'}
+                alt="Profile"
+                className="w-24 h-24 rounded-full object-cover border border-gray-200"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="employeeId">Employee No.</Label>
+                <Input
+                  id="employeeId"
+                  name="employeeId"
+                  type="text"
+                  value={profile.employeeId}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('employeeId')}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="userId">User ID</Label>
+                <Input
+                  id="userId"
+                  name="userId"
+                  type="text"
+                  value={profile.userId}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('userId')}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  value={profile.name}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                <Input
+                  id="dateOfBirth"
+                  name="dateOfBirth"
+                  type="date"
+                  value={profile.dateOfBirth}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="fatherName">Father Name</Label>
+                <Input
+                  id="fatherName"
+                  name="fatherName"
+                  type="text"
+                  value={profile.fatherName}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="motherName">Mother Name</Label>
+                <Input
+                  id="motherName"
+                  name="motherName"
+                  type="text"
+                  value={profile.motherName}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="mobileNumber">Mobile Number</Label>
+                <Input
+                  id="mobileNumber"
+                  name="mobileNumber"
+                  type="tel"
+                  value={profile.mobileNumber}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="permanentAddress">Permanent Address</Label>
+                <Input
+                  id="permanentAddress"
+                  name="permanentAddress"
+                  type="text"
+                  value={profile.permanentAddress}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="currentAddress">Current Address</Label>
+                <Input
+                  id="currentAddress"
+                  name="currentAddress"
+                  type="text"
+                  value={profile.currentAddress}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={profile.email}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="aadharNumber">Aadhar Number</Label>
+                <Input
+                  id="aadharNumber"
+                  name="aadharNumber"
+                  type="text"
+                  value={profile.aadharNumber}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="gender">Gender</Label>
+                <select
+                  id="gender"
+                  name="gender"
+                  value={profile.gender}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                >
+                  <option value="">Select</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="maritalStatus">Marital Status</Label>
+                <select
+                  id="maritalStatus"
+                  name="maritalStatus"
+                  value={profile.maritalStatus}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                >
+                  <option value="">Select</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                </select>
+              </div>
+              {profile.maritalStatus === 'Married' && (
+                <div>
+                  <Label htmlFor="spouseName">Spouse Name</Label>
+                  <Input
+                    id="spouseName"
+                    name="spouseName"
+                    type="text"
+                    value={profile.spouseName}
+                    onChange={handleChange}
+                    disabled={isLocked}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="emergencyContactName">Emergency Contact Name</Label>
+                <Input
+                  id="emergencyContactName"
+                  name="emergencyContactName"
+                  type="text"
+                  value={profile.emergencyContactName}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="emergencyContactNumber">Emergency Contact Number</Label>
+                <Input
+                  id="emergencyContactNumber"
+                  name="emergencyContactNumber"
+                  type="tel"
+                  value={profile.emergencyContactNumber}
+                  onChange={handleChange}
+                  disabled={isLocked}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="dateOfJoining">Date of Joining</Label>
+                <Input
+                  id="dateOfJoining"
+                  name="dateOfJoining"
+                  type="date"
+                  value={profile.dateOfJoining}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('dateOfJoining')}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="reportingManager.name">Reporting Manager</Label>
+                <Input
+                  id="reportingManager.name"
+                  name="reportingManager.name"
+                  type="text"
+                  value={profile.reportingManager.name}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('reportingManager.name')}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <select
+                  id="status"
+                  name="status"
+                  value={profile.status}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('status')}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                >
+                  <option value="">Select</option>
+                  <option value="Active">Active</option>
+                  <option value="Probation">Probation</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              {profile.status === 'Probation' && (
+                <>
+                  <div>
+                    <Label htmlFor="probationPeriod">Probation Period (Months)</Label>
+                    <Input
+                      id="probationPeriod"
+                      name="probationPeriod"
+                      type="text"
+                      value={profile.probationPeriod}
+                      onChange={handleChange}
+                      disabled={lockedFields.includes('probationPeriod')}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="confirmationDate">Confirmation Date</Label>
+                    <Input
+                      id="confirmationDate"
+                      name="confirmationDate"
+                      type="date"
+                      value={profile.confirmationDate}
+                      onChange={handleChange}
+                      disabled={lockedFields.includes('confirmationDate')}
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              )}
+              <div>
+                <Label htmlFor="referredBy">Referred By</Label>
+                <Input
+                  id="referredBy"
+                  name="referredBy"
+                  type="text"
+                  value={profile.referredBy}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('referredBy')}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="loginType">Login Type</Label>
+                <Input
+                  id="loginType"
+                  name="loginType"
+                  type="text"
+                  value={profile.loginType}
+                  onChange={handleChange}
+                  disabled={lockedFields.includes('loginType')}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          </>
+        );
+      case 2:
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="designation">Designation</Label>
+              <Input
+                id="designation"
+                name="designation"
+                type="text"
+                value={profile.designation}
+                onChange={handleChange}
+                disabled={lockedFields.includes('designation')}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                name="location"
+                type="text"
+                value={profile.location}
+                onChange={handleChange}
+                disabled={isLocked}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="department.name">Department</Label>
+              <Input
+                id="department.name"
+                name="department.name"
+                type="text"
+                value={profile.department.name}
+                onChange={handleChange}
+                disabled={lockedFields.includes('department.name')}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="employeeType">Employee Type</Label>
+              <Input
+                id="employeeType"
+                name="employeeType"
+                type="text"
+                value={profile.employeeType}
+                onChange={handleChange}
+                disabled={isLocked}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        );
+      case 3:
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="panNumber">PAN Number</Label>
+              <Input
+                id="panNumber"
+                name="panNumber"
+                type="text"
+                value={profile.panNumber}
+                onChange={handleChange}
+                disabled={isLocked}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="pfNumber">PF Number</Label>
+              <Input
+                id="pfNumber"
+                name="pfNumber"
+                type="text"
+                value={profile.pfNumber}
+                onChange={handleChange}
+                disabled={isLocked}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="uanNumber">UAN Number</Label>
+              <Input
+                id="uanNumber"
+                name="uanNumber"
+                type="text"
+                value={profile.uanNumber}
+                onChange={handleChange}
+                disabled={isLocked}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="esiNumber">ESI Number</Label>
+              <Input
+                id="esiNumber"
+                name="esiNumber"
+                type="text"
+                value={profile.esiNumber}
+                onChange={handleChange}
+                disabled={isLocked}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        );
+      case 4:
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { id: 'tenthTwelfthDocs', label: '10th & 12th Certificates (PDF, 5MB)', accept: 'application/pdf' },
+              { id: 'graduationDocs', label: 'Graduation Certificates (PDF, 5MB)', accept: 'application/pdf' },
+              { id: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates (PDF, 5MB, Optional)', accept: 'application/pdf' },
+              { id: 'experienceCertificate', label: 'Experience Certificate (PDF, 5MB, Optional)', accept: 'application/pdf' },
+              { id: 'salarySlips', label: 'Last 3 Months Salary Slips (PDF, 1MB)', accept: 'application/pdf', conditional: true },
+              { id: 'panCard', label: 'PAN Card (PDF, 1MB)', accept: 'application/pdf' },
+              { id: 'aadharCard', label: 'Aadhar Card (PDF, 1MB)', accept: 'application/pdf' },
+              { id: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque (PDF, 1MB)', accept: 'application/pdf' },
+              { id: 'medicalCertificate', label: 'Medical Fitness Certificate (PDF, 2MB)', accept: 'application/pdf' },
+              { id: 'backgroundVerification', label: 'Background Verification (PDF, 2MB)', accept: 'application/pdf' },
+              { id: 'profilePicture', label: 'Profile Picture', accept: 'image/*' },
+            ].map((doc, index) => (
+              <div key={index} className={doc.conditional && !profile.documents.includes('experienceCertificate') && !files.experienceCertificate ? 'hidden' : ''}>
+                <Label htmlFor={doc.id}>{doc.label}</Label>
+                {profile.documents.includes(doc.id) || (doc.id === 'profilePicture' && profile.profilePicture) ? (
+                  <a
+                    href={`/api/employees/files/${profile[doc.id] || profile.documents.find(id => id === doc.id)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline block mt-1"
+                  >
+                    View
+                  </a>
+                ) : (
+                  <>
+                    <Input
+                      id={doc.id}
+                      name={doc.id}
+                      type="file"
+                      accept={doc.accept}
+                      onChange={handleChange}
+                      disabled={isLocked}
+                      className={fileErrors[doc.id] ? 'border-red-500 mt-1' : 'mt-1'}
+                      required={doc.id !== 'postgraduationDocs' && doc.id !== 'experienceCertificate' && (!doc.conditional || (profile.documents.includes('experienceCertificate') || files.experienceCertificate))}
+                    />
+                    {fileErrors[doc.id] && <p className="mt-1 text-sm text-red-500">{fileErrors[doc.id]}</p>}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      case 5:
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="paymentType">Payment Type</Label>
+              <select
+                id="paymentType"
+                name="paymentType"
+                value={profile.paymentType}
+                onChange={handleChange}
+                disabled={lockedFields.includes('paymentType')}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+              >
+                <option value="">Select</option>
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+              </select>
+            </div>
+            {profile.paymentType === 'Bank Transfer' && (
+              <>
+                <div>
+                  <Label htmlFor="bankDetails.bankName">Bank Name</Label>
+                  <Input
+                    id="bankDetails.bankName"
+                    name="bankDetails.bankName"
+                    type="text"
+                    value={profile.bankDetails.bankName}
+                    onChange={handleChange}
+                    disabled={isLocked}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bankDetails.bankBranch">Bank Branch</Label>
+                  <Input
+                    id="bankDetails.bankBranch"
+                    name="bankDetails.bankBranch"
+                    type="text"
+                    value={profile.bankDetails.bankBranch}
+                    onChange={handleChange}
+                    disabled={isLocked}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bankDetails.accountNumber">Account Number</Label>
+                  <Input
+                    id="bankDetails.accountNumber"
+                    name="bankDetails.accountNumber"
+                    type="text"
+                    value={profile.bankDetails.accountNumber}
+                    onChange={handleChange}
+                    disabled={isLocked}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bankDetails.ifscCode">IFSC Code</Label>
+                  <Input
+                    id="bankDetails.ifscCode"
+                    name="bankDetails.ifscCode"
+                    type="text"
+                    value={profile.bankDetails.ifscCode}
+                    onChange={handleChange}
+                    disabled={isLocked}
+                    className="mt-1"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   if (loading) {
@@ -96,113 +822,63 @@ function Profile() {
 
   return (
     <ContentLayout title="Profile">
-      <form onSubmit={handleSubmit}>
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
-            <TextField
-              label="Name"
-              name="name"
-              value={profile.name}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Date of Birth"
-              name="dateOfBirth"
-              type="date"
-              value={profile.dateOfBirth}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Mobile Number"
-              name="mobileNumber"
-              value={profile.mobileNumber}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Permanent Address"
-              name="permanentAddress"
-              value={profile.permanentAddress}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Aadhar Number"
-              name="aadharNumber"
-              value={profile.aadharNumber}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Date of Joining"
-              name="dateOfJoining"
-              type="date"
-              value={profile.dateOfJoining}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Department"
-              name="department"
-              value={profile.department}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Designation"
-              name="designation"
-              value={profile.designation}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label="Role"
-              name="loginType"
-              value={profile.loginType}
-              onChange={handleChange}
-              fullWidth
-              disabled={isLocked}
-            />
-          </Grid>
-        </Grid>
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          style={{ marginTop: 20 }}
-          disabled={isLocked}
-        >
-          Save
-        </Button>
-      </form>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-4xl mx-auto"
+      >
+        <Card className="bg-white shadow-lg border-none">
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit}>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold">
+                  {step === 1 && 'Basic Information'}
+                  {step === 2 && 'Employee Position'}
+                  {step === 3 && 'Statutory Information'}
+                  {step === 4 && 'Document Upload'}
+                  {step === 5 && 'Payment Information'}
+                </h2>
+                <div className="flex justify-between mt-2">
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <div key={s} className={`h-2 w-1/5 rounded ${s <= step ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                  ))}
+                </div>
+              </div>
+              {renderStep()}
+              <div className="mt-6 flex justify-between">
+                {step > 1 && (
+                  <Button
+                    type="button"
+                    onClick={() => setStep(step - 1)}
+                    className="bg-gray-600 hover:bg-gray-700 text-white"
+                  >
+                    Previous
+                  </Button>
+                )}
+                <div className="flex gap-2">
+                  {step < 5 && (
+                    <Button
+                      type="button"
+                      onClick={() => setStep(step + 1)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Next
+                    </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={isLocked || loading}
+                    className="bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400"
+                  >
+                    {loading ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </motion.div>
     </ContentLayout>
   );
 }

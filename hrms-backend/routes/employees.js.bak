@@ -7,86 +7,26 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const Audit = require('../models/Audit');
 const multer = require('multer');
-const { GridFsStorage } = require('multer-gridfs-storage');
+const GridFsStorage = require('multer-gridfs-storage'); // For v4.2.0
 const crypto = require('crypto');
 const path = require('path');
 require('dotenv').config();
 
-// Initialize dedicated GridFS connection
+// Initialize GridFS
 let gfs;
-const conn = mongoose.createConnection(process.env.MONGO_URI);
+const conn = mongoose.connection;
 
 conn.on('error', (err) => {
-  console.error('GridFS MongoDB connection error:', err);
+  console.error('MongoDB connection error:', err);
 });
 
 conn.once('open', () => {
-  console.log('GridFS MongoDB connection established');
-  gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'Uploads' });
-});
-
-// Configure Multer with GridFS Storage (once at startup)
-const storage = new GridFsStorage({
-  url: process.env.MONGO_URI,
-  options: {}, // Remove deprecated options
-  file: (req, file) => {
-    console.log('Processing file:', file);
-    return new Promise((resolve, reject) => {
-      crypto.randomBytes(16, (err, buf) => {
-        if (err) {
-          console.error('Error generating filename:', err);
-          return reject(err);
-        }
-        const filename = buf.toString('hex') + path.extname(file.originalname);
-        const fileInfo = {
-          filename,
-          bucketName: 'Uploads',
-          metadata: {
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            fieldname: file.fieldname,
-            employeeId: req.body.employeeId || req.params.id || 'unknown',
-          },
-        };
-        console.log('File info prepared:', fileInfo);
-        resolve(fileInfo);
-      });
-    });
-  },
-});
-
-// Log storage events
-storage.on('connection', () => {
-  console.log('Multer-GridFS-Storage connected to MongoDB');
-});
-storage.on('connectionError', (err) => {
-  console.error('Multer-GridFS-Storage connection error:', err);
-});
-storage.on('streamError', (err) => {
-  console.error('Multer-GridFS-Storage stream error:', err);
-});
-
-// Multer upload middleware
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    console.log('File received in filter:', file);
-    const isProfilePicture = file.fieldname === 'profilePicture';
-    const isJpeg = isProfilePicture && (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg');
-    const isPdf = !isProfilePicture && file.mimetype === 'application/pdf';
-
-    if (!isJpeg && !isPdf) {
-      console.log('File rejected:', file.mimetype);
-      return cb(
-        new Error(
-          `Invalid file type for ${file.fieldname}. Only ${isProfilePicture ? 'JPEG/JPG images' : 'PDF files'} are allowed.`
-        )
-      );
-    }
-    console.log('File accepted:', file.mimetype);
-    cb(null, true);
-  },
+  console.log('MongoDB connection established, initializing GridFSBucket');
+  try {
+    gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'Uploads' });
+  } catch (err) {
+    console.error('Error initializing GridFSBucket:', err);
+  }
 });
 
 // Middleware to check gfs readiness
@@ -114,34 +54,94 @@ const checkForFiles = (req, res, next) => {
   const contentType = req.headers['content-type'] || '';
   if (contentType.includes('multipart/form-data')) {
     console.log('Detected multipart/form-data, processing with multer');
-    upload.fields([
-      { name: 'profilePicture', maxCount: 1 },
-      { name: 'tenthTwelfthDocs', maxCount: 1 },
-      { name: 'graduationDocs', maxCount: 1 },
-      { name: 'postgraduationDocs', maxCount: 1 },
-      { name: 'experienceCertificate', maxCount: 1 },
-      { name: 'salarySlips', maxCount: 1 },
-      { name: 'panCard', maxCount: 1 },
-      { name: 'aadharCard', maxCount: 1 },
-      { name: 'bankPassbook', maxCount: 1 },
-      { name: 'medicalCertificate', maxCount: 1 },
-      { name: 'backgroundVerification', maxCount: 1 },
-    ])(req, res, (err) => {
-      if (err instanceof multer.MulterError) {
-        console.error('Multer error:', err);
-        return res.status(400).json({ message: `Multer error: ${err.message}` });
-      }
-      if (err) {
-        console.error('Upload error:', err);
-        return res.status(400).json({ message: `Upload error: ${err.message}` });
-      }
-      next();
-    });
-  } else {
-    console.log('No files detected, skipping multer');
-    req.files = {}; // Ensure req.files is defined
-    next();
+    return next();
   }
+  console.log('No files detected, skipping multer');
+  req.files = {}; // Ensure req.files is defined
+  next();
+};
+
+// Configure Multer with GridFS Storage (deferred initialization)
+const createStorage = () => {
+  return new GridFsStorage({
+    url: process.env.MONGO_URI, // Use MongoDB URI
+    file: (req, file) => {
+      console.log('Processing file:', file);
+      return new Promise((resolve, reject) => {
+        crypto.randomBytes(16, (err, buf) => {
+          if (err) {
+            console.error('Error generating filename:', err);
+            return reject(err);
+          }
+          const filename = buf.toString('hex') + path.extname(file.originalname);
+          const fileInfo = {
+            filename: filename,
+            bucketName: 'Uploads',
+            metadata: {
+              originalname: file.originalname,
+              mimetype: file.mimetype,
+              fieldname: file.fieldname,
+              employeeId: req.body.employeeId || req.params.id || 'unknown'
+            }
+          };
+          console.log('File info prepared:', fileInfo);
+          resolve(fileInfo);
+        });
+      });
+    }
+  });
+};
+
+// Create upload middleware
+const createUploadMiddleware = () => {
+  const storage = createStorage();
+  storage.on('connection', () => {
+    console.log('Multer-GridFS-Storage connected to MongoDB');
+  });
+  storage.on('connectionError', (err) => {
+    console.error('Multer-GridFS-Storage connection error:', err);
+  });
+  storage.on('streamError', (err) => {
+    console.error('Multer-GridFS-Storage stream error:', err);
+  });
+
+  return multer({
+    storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB global limit
+    },
+    fileFilter: (req, file, cb) => {
+      console.log('File received in filter:', file);
+      const isProfilePicture = file.fieldname === 'profilePicture';
+      const isJpeg = isProfilePicture && (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg');
+      const isPdf = !isProfilePicture && file.mimetype === 'application/pdf';
+
+      if (!isJpeg && !isPdf) {
+        console.log('File rejected:', file.mimetype);
+        return cb(
+          new Error(
+            `Invalid file type for ${file.fieldname}. Only ${isProfilePicture ? 'JPEG/JPG images' : 'PDF files'} are allowed.`
+          )
+        );
+      }
+
+      console.log('File accepted:', file.mimetype);
+      cb(null, true);
+    }
+  });
+};
+
+// Multer error handling middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    console.error('Multer error:', err);
+    return res.status(400).json({ message: `Multer error: ${err.message}` });
+  }
+  if (err) {
+    console.error('Upload error:', err);
+    return res.status(400).json({ message: `Upload error: ${err.message}` });
+  }
+  next();
 };
 
 // Get all employees (Admin and CEO only)
@@ -199,7 +199,37 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Create employee (Admin only)
-router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForFiles, async (req, res) => {
+router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForFiles, async (req, res, next) => {
+  try {
+    if (req.headers['content-type']?.includes('multipart/form-data')) {
+      const upload = createUploadMiddleware();
+      upload.fields([
+        { name: 'profilePicture', maxCount: 1 },
+        { name: 'tenthTwelfthDocs', maxCount: 1 },
+        { name: 'graduationDocs', maxCount: 1 },
+        { name: 'postgraduationDocs', maxCount: 1 },
+        { name: 'experienceCertificate', maxCount: 1 },
+        { name: 'salarySlips', maxCount: 1 },
+        { name: 'panCard', maxCount: 1 },
+        { name: 'aadharCard', maxCount: 1 },
+        { name: 'bankPassbook', maxCount: 1 },
+        { name: 'medicalCertificate', maxCount: 1 },
+        { name: 'backgroundVerification', maxCount: 1 }
+      ])(req, res, (err) => {
+        if (err) {
+          console.error('Multer upload error in POST:', err);
+          return res.status(400).json({ message: `Upload error: ${err.message}` });
+        }
+        next();
+      });
+    } else {
+      next();
+    }
+  } catch (err) {
+    console.error('Error in POST middleware:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+}, async (req, res) => {
   try {
     console.log('Received POST request body:', req.body);
     console.log('Received files:', req.files);
@@ -358,7 +388,37 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
 });
 
 // Update employee (Admin or authorized Employee)
-router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (req, res) => {
+router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (req, res, next) => {
+  try {
+    if (req.headers['content-type']?.includes('multipart/form-data')) {
+      const upload = createUploadMiddleware();
+      upload.fields([
+        { name: 'profilePicture', maxCount: 1 },
+        { name: 'tenthTwelfthDocs', maxCount: 1 },
+        { name: 'graduationDocs', maxCount: 1 },
+        { name: 'postgraduationDocs', maxCount: 1 },
+        { name: 'experienceCertificate', maxCount: 1 },
+        { name: 'salarySlips', maxCount: 1 },
+        { name: 'panCard', maxCount: 1 },
+        { name: 'aadharCard', maxCount: 1 },
+        { name: 'bankPassbook', maxCount: 1 },
+        { name: 'medicalCertificate', maxCount: 1 },
+        { name: 'backgroundVerification', maxCount: 1 }
+      ])(req, res, (err) => {
+        if (err) {
+          console.error('Multer upload error in PUT:', err);
+          return res.status(400).json({ message: `Upload error: ${err.message}` });
+        }
+        next();
+      });
+    } else {
+      next();
+    }
+  } catch (err) {
+    console.error('Error in PUT middleware:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+}, async (req, res) => {
   try {
     console.log('Received PUT request body:', req.body);
     console.log('Received files:', req.files);

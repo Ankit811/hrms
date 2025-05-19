@@ -5,7 +5,11 @@ const employeeSchema = new mongoose.Schema({
   employeeId: { type: String, required: true, unique: true },
   userId: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: {
+    type: String,
+    required: [function() { return this.isNew; }, 'Password is required for new employees'],
+    minlength: [6, 'Password must be at least 6 characters long']
+  },
   name: { type: String, required: true },
   dateOfBirth: { type: Date, required: true },
   fatherName: { type: String, required: true },
@@ -54,7 +58,7 @@ const employeeSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 employeeSchema.pre('save', async function(next) {
-  if (this.isModified('password')) {
+  if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(this.password, 10);
   }
   next();

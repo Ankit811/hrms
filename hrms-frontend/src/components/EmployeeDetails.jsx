@@ -15,93 +15,99 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
     switch (step) {
       case 1:
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <strong>Employee No.:</strong> {employee.employeeId}
-            </div>
-            <div>
-              <strong>User ID:</strong> {employee.userId}
-            </div>
-            <div>
-              <strong>Name:</strong> {employee.name}
-            </div>
-            <div>
-              <strong>Date of Birth:</strong> {formatDate(employee.dateOfBirth)}
-            </div>
-            <div>
-              <strong>Father Name:</strong> {employee.fatherName}
-            </div>
-            <div>
-              <strong>Mother Name:</strong> {employee.motherName}
-            </div>
-            <div>
-              <strong>Mobile Number:</strong> {employee.mobileNumber}
-            </div>
-            <div>
-              <strong>Permanent Address:</strong> {employee.permanentAddress}
-            </div>
-            <div>
-              <strong>Current Address:</strong> {employee.currentAddress}
-            </div>
-            <div>
-              <strong>Email:</strong> {employee.email}
-            </div>
-            <div>
-              <strong>Aadhar Number:</strong> {employee.aadharNumber}
-            </div>
-            <div>
-              <strong>Gender:</strong> {employee.gender}
-            </div>
-            <div>
-              <strong>Marital Status:</strong> {employee.maritalStatus}
-            </div>
-            {employee.maritalStatus === 'Married' && (
+          <>
+            <img
+              src={employee.profilePicture ? `/api/employees/files/${employee.profilePicture}` : 'https://via.placeholder.com/96?text=User'}
+              alt="Profile"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <strong>Spouse Name:</strong> {employee.spouseName || 'N/A'}
+                <strong>Employee No.:</strong> {employee.employeeId}
               </div>
-            )}
-            <div>
-              <strong>Emergency Contact Name:</strong> {employee.emergencyContactName}
-            </div>
-            <div>
-              <strong>Emergency Contact Number:</strong> {employee.emergencyContactNumber}
-            </div>
-            <div>
-              <strong>Date of Joining:</strong> {formatDate(employee.dateOfJoining)}
-            </div>
-            <div>
-              <strong>Reporting Manager:</strong> {employee.reportingManager?.name || 'N/A'}
-            </div>
-            <div>
-              <strong>Status:</strong> {employee.status}
-            </div>
-            {employee.status === 'Probation' && (
-              <>
-                <div>
-                  <strong>Probation Period:</strong> {employee.probationPeriod} months
-                </div>
-                <div>
-                  <strong>Confirmation Date:</strong> {formatDate(employee.confirmationDate)}
-                </div>
-              </>
-            )}
-            <div>
-              <strong>Referred By:</strong> {employee.referredBy || 'N/A'}
-            </div>
-            <div>
-              <strong>Login Type:</strong> {employee.loginType}
-            </div>
-            {isAdmin && (
-              <div className="col-span-2">
-                <Button
-                  onClick={() => onLockToggle('basicInfo')}
-                  className={employee.basicInfoLocked ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}
-                >
-                  {employee.basicInfoLocked ? 'Unlock Basic Info' : 'Lock Basic Info'}
-                </Button>
+              <div>
+                <strong>User ID:</strong> {employee.userId}
               </div>
-            )}
-          </div>
+              <div>
+                <strong>Name:</strong> {employee.name}
+              </div>
+              <div>
+                <strong>Date of Birth:</strong> {formatDate(employee.dateOfBirth)}
+              </div>
+              <div>
+                <strong>Father Name:</strong> {employee.fatherName}
+              </div>
+              <div>
+                <strong>Mother Name:</strong> {employee.motherName}
+              </div>
+              <div>
+                <strong>Mobile Number:</strong> {employee.mobileNumber}
+              </div>
+              <div>
+                <strong>Permanent Address:</strong> {employee.permanentAddress}
+              </div>
+              <div>
+                <strong>Current Address:</strong> {employee.currentAddress}
+              </div>
+              <div>
+                <strong>Email:</strong> {employee.email}
+              </div>
+              <div>
+                <strong>Aadhar Number:</strong> {employee.aadharNumber}
+              </div>
+              <div>
+                <strong>Gender:</strong> {employee.gender}
+              </div>
+              <div>
+                <strong>Marital Status:</strong> {employee.maritalStatus}
+              </div>
+              {employee.maritalStatus === 'Married' && (
+                <div>
+                  <strong>Spouse Name:</strong> {employee.spouseName || 'N/A'}
+                </div>
+              )}
+              <div>
+                <strong>Emergency Contact Name:</strong> {employee.emergencyContactName}
+              </div>
+              <div>
+                <strong>Emergency Contact Number:</strong> {employee.emergencyContactNumber}
+              </div>
+              <div>
+                <strong>Date of Joining:</strong> {formatDate(employee.dateOfJoining)}
+              </div>
+              <div>
+                <strong>Reporting Manager:</strong> {employee.reportingManager?.name || 'N/A'}
+              </div>
+              <div>
+                <strong>Status:</strong> {employee.status}
+              </div>
+              {employee.status === 'Probation' && (
+                <>
+                  <div>
+                    <strong>Probation Period:</strong> {employee.probationPeriod} months
+                  </div>
+                  <div>
+                    <strong>Confirmation Date:</strong> {formatDate(employee.confirmationDate)}
+                  </div>
+                </>
+              )}
+              <div>
+                <strong>Referred By:</strong> {employee.referredBy || 'N/A'}
+              </div>
+              <div>
+                <strong>Login Type:</strong> {employee.loginType}
+              </div>
+              {isAdmin && (
+                <div className="col-span-2">
+                  <Button
+                    onClick={() => onLockToggle('basicInfo')}
+                    className={employee.basicInfoLocked ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}
+                  >
+                    {employee.basicInfoLocked ? 'Unlock Basic Info' : 'Lock Basic Info'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
         );
       case 2:
         return (
