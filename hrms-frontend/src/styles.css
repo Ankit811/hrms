@@ -1,9 +1,9 @@
-@tailwind base;
+/* @tailwind base;
 @tailwind components;
-@tailwind utilities;
+@tailwind utilities; */
 
 /* Global Styles */
-* {
+/* * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -11,20 +11,20 @@
 }
 
 body {
-  @apply bg-background; /* Use Tailwind's background variable */
-}
+  @apply bg-background;
+} */
 
 /* Container for Sidebar + Content */
-.container {
+/* .container {
   display: flex;
   min-height: 100vh;
   flex-direction: row;
   justify-content: flex-start;
-}
+} */
 
 /* Responsive Design */
-@media (max-width: 768px) {
+/* @media (max-width: 768px) {
   .container {
     flex-direction: column;
   }
-}
+} */

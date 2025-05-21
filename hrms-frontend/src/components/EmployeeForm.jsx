@@ -362,6 +362,7 @@ function EmployeeForm() {
                 <SelectContent>
                   <SelectItem value="Confirmed">Confirmed</SelectItem>
                   <SelectItem value="Probation">Probation</SelectItem>
+                  <SelectItem value="Contractual">Contractual</SelectItem>
                 </SelectContent>
               </Select>
               {errors.status && <p className="mt-1 text-sm text-red-500">{errors.status}</p>}
@@ -612,7 +613,7 @@ function EmployeeForm() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-4xl mx-auto"
       >
-        <Card className="bg-white shadow-lg border-none">
+        <Card className=" shadow-lg border">
           <CardContent className="p-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold">

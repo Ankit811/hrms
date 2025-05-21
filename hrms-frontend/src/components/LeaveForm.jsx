@@ -123,7 +123,7 @@ function LeaveForm() {
 
   return (
     <ContentLayout title="Apply for Leave">
-      <Card className="max-w-lg mx-auto bg-white shadow-lg border-none">
+      <Card className="max-w-lg mx-auto shadow-lg border">
         <CardContent className="p-6">
           <form
             onSubmit={handleSubmit}
@@ -131,7 +131,7 @@ function LeaveForm() {
           >
             {/* Leave Type */}
             <div>
-              <Label htmlFor="leaveType" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="leaveType" className="text-sm font-medium text">
                 Leave Type
               </Label>
               <Select
@@ -139,10 +139,10 @@ function LeaveForm() {
                 value={form.leaveType}
                 aria-label="Select leave type"
               >
-                <SelectTrigger id="leaveType" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger id="leaveType" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                   <SelectValue placeholder="Select leave type" />
                 </SelectTrigger>
-                <SelectContent className="z-50">
+                <SelectContent >
                   <SelectItem value="Paid">Paid</SelectItem>
                   <SelectItem value="Unpaid">Unpaid</SelectItem>
                 </SelectContent>
@@ -151,7 +151,7 @@ function LeaveForm() {
 
             {/* Category */}
             <div>
-              <Label htmlFor="category" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="category" className="text-sm font-medium text">
                 Category
               </Label>
               <Select
@@ -159,7 +159,7 @@ function LeaveForm() {
                 value={form.category}
                 aria-label="Select category"
               >
-                <SelectTrigger id="category" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger id="category" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -179,7 +179,7 @@ function LeaveForm() {
                 className="border-gray-300 focus:ring-blue-500"
                 aria-label="Compensatory Leave"
               />
-              <Label htmlFor="isCompensatory" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="isCompensatory" className="text-sm font-medium text">
                 Compensatory Leave
               </Label>
             </div>
@@ -187,7 +187,7 @@ function LeaveForm() {
             {/* Compensatory Details */}
             {form.isCompensatory && (
               <div className="col-span-1 md:col-span-2">
-                <Label htmlFor="compensatoryDetails" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="compensatoryDetails" className="text-sm font-medium text">
                   Compensatory Details
                 </Label>
                 <Textarea
@@ -203,7 +203,7 @@ function LeaveForm() {
 
             {/* Leave Duration */}
             <div>
-              <Label htmlFor="duration" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="duration" className="text-sm font-medium text">
                 Leave Duration
               </Label>
               <Select
@@ -219,7 +219,7 @@ function LeaveForm() {
                 value={form.duration}
                 aria-label="Select leave duration"
               >
-                <SelectTrigger id="duration" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger id="duration" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -234,7 +234,7 @@ function LeaveForm() {
               <>
                 {/* Session */}
                 <div>
-                  <Label htmlFor="halfDay.session" className="text-sm font-medium text-gray-700">
+                  <Label htmlFor="halfDay.session" className="text-sm font-medium text">
                     Session
                   </Label>
                   <Select
@@ -242,7 +242,7 @@ function LeaveForm() {
                     value={form.halfDay.session}
                     aria-label="Select session"
                   >
-                    <SelectTrigger id="halfDay.session" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                    <SelectTrigger id="halfDay.session" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                       <SelectValue placeholder="Select session" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
@@ -254,7 +254,7 @@ function LeaveForm() {
 
                 {/* Half Day Date */}
                 <div>
-                  <Label htmlFor="halfDay.date" className="text-sm font-medium text-gray-700">
+                  <Label htmlFor="halfDay.date" className="text-sm font-medium text">
                     Half Day Date
                   </Label>
                   <Input
@@ -271,7 +271,7 @@ function LeaveForm() {
               <>
                 {/* From Date */}
                 <div>
-                  <Label htmlFor="fullDay.from" className="text-sm font-medium text-gray-700">
+                  <Label htmlFor="fullDay.from" className="text-sm font-medium text">
                     From Date
                   </Label>
                   <Input
@@ -286,7 +286,7 @@ function LeaveForm() {
 
                 {/* To Date */}
                 <div>
-                  <Label htmlFor="fullDay.to" className="text-sm font-medium text-gray-700">
+                  <Label htmlFor="fullDay.to" className="text-sm font-medium text">
                     To Date
                   </Label>
                   <Input
@@ -303,7 +303,7 @@ function LeaveForm() {
 
             {/* Reason */}
             <div className="col-span-1 md:col-span-2">
-              <Label htmlFor="reason" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="reason" className="text-sm font-medium text">
                 Reason
               </Label>
               <Textarea
@@ -320,7 +320,7 @@ function LeaveForm() {
 
             {/* Charge Given To */}
             <div>
-              <Label htmlFor="chargeGivenTo" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="chargeGivenTo" className="text-sm font-medium text">
                 Charge Given To
               </Label>
               <Input
@@ -337,7 +337,7 @@ function LeaveForm() {
 
             {/* Emergency Contact */}
             <div>
-              <Label htmlFor="emergencyContact" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="emergencyContact" className="text-sm font-medium text">
                 Emergency Contact
               </Label>
               <Input

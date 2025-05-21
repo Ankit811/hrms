@@ -135,7 +135,7 @@ function LeaveList() {
 
   return (
     <ContentLayout title="Leave List">
-      <Card className="max-w-5xl mx-auto bg-white shadow-lg border-none">
+      <Card className="max-w-5xl mx-auto shadow-lg border">
         <CardContent className="p-6">
           {error && (
             <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
@@ -156,7 +156,7 @@ function LeaveList() {
           <div className="flex flex-wrap gap-4 mb-6">
             {/* Leave Type Filter */}
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="leaveType" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="leaveType" className="text-sm font-medium text">
                 Leave Type
               </Label>
               <Select
@@ -165,7 +165,7 @@ function LeaveList() {
                 aria-label="Select leave type filter"
                 disabled={loading}
               >
-                <SelectTrigger id="leaveType" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger id="leaveType" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -179,7 +179,7 @@ function LeaveList() {
 
             {/* Status Filter */}
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="status" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="status" className="text-sm font-medium text">
                 Approval Status (Any Stage)
               </Label>
               <Select
@@ -188,7 +188,7 @@ function LeaveList() {
                 aria-label="Select approval status filter"
                 disabled={loading}
               >
-                <SelectTrigger id="status" className="mt-1 bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger id="status" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -237,19 +237,19 @@ function LeaveList() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <Table className="min-w-full bg-white">
+            <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="border-b">
-                  <TableHead className="font-semibold text-gray-700">Employee</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Type</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Category</TableHead>
-                  <TableHead className="font-semibold text-gray-700">From</TableHead>
-                  <TableHead className="font-semibold text-gray-700">To</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Status (HOD)</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Status (Admin)</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Status (CEO)</TableHead>
+                  <TableHead className="font-semibold text">Employee</TableHead>
+                  <TableHead className="font-semibold text">Type</TableHead>
+                  <TableHead className="font-semibold text">Category</TableHead>
+                  <TableHead className="font-semibold text">From</TableHead>
+                  <TableHead className="font-semibold text">To</TableHead>
+                  <TableHead className="font-semibold text">Status (HOD)</TableHead>
+                  <TableHead className="font-semibold text">Status (Admin)</TableHead>
+                  <TableHead className="font-semibold text">Status (CEO)</TableHead>
                   {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
-                    <TableHead className="font-semibold text-gray-700">Action</TableHead>
+                    <TableHead className="font-semibold text">Action</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -258,7 +258,7 @@ function LeaveList() {
                   <TableRow>
                     <TableCell
                       colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8}
-                      className="text-center text-gray-500 py-4"
+                      className="text-center text py-4"
                     >
                       Loading...
                     </TableCell>
@@ -267,7 +267,7 @@ function LeaveList() {
                   <TableRow>
                     <TableCell
                       colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8}
-                      className="text-center text-gray-500 py-4"
+                      className="text-center text py-4"
                     >
                       No leave records found.
                     </TableCell>
@@ -275,20 +275,20 @@ function LeaveList() {
                 ) : (
                   filtered.map((leave) => (
                     <TableRow key={leave._id} className="hover:bg-gray-50">
-                      <TableCell className="text-gray-700">{leave.name}</TableCell>
-                      <TableCell className="text-gray-700">
+                      <TableCell className="text">{leave.name}</TableCell>
+                      <TableCell className="text">
                         {leave.isCompensatory ? 'Compensatory' : leave.leaveType}
                       </TableCell>
-                      <TableCell className="text-gray-700">{leave.category}</TableCell>
-                      <TableCell className="text-gray-700">
+                      <TableCell className="text">{leave.category}</TableCell>
+                      <TableCell className="text">
                         {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-gray-700">
+                      <TableCell className="text">
                         {new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-gray-700">{leave.status.hod || 'Pending'}</TableCell>
-                      <TableCell className="text-gray-700">{leave.status.admin || 'Pending'}</TableCell>
-                      <TableCell className="text-gray-700">{leave.status.ceo || 'Pending'}</TableCell>
+                      <TableCell className="text">{leave.status.hod || 'Pending'}</TableCell>
+                      <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
+                      <TableCell className="text">{leave.status.ceo || 'Pending'}</TableCell>
                       {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                         <TableCell>
                           {user.loginType === 'HOD' && leave.status.hod === 'Pending' && (

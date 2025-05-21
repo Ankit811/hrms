@@ -25,7 +25,7 @@ const employeeSchema = new mongoose.Schema({
   emergencyContactNumber: { type: String, required: true },
   dateOfJoining: { type: Date, required: true },
   reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-  status: { type: String, enum: ['Confirmed', 'Probation'], required: true },
+  status: { type: String, enum: ['Confirmed', 'Probation', 'Contractual'], required: true },
   probationPeriod: { type: Number, required: function() { return this.status === 'Probation'; } },
   confirmationDate: { type: Date, required: function() { return this.status === 'Probation'; } },
   referredBy: { type: String },

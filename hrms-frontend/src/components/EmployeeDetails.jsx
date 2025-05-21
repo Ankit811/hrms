@@ -3,9 +3,12 @@ import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { useFileHandler } from '../hooks/useFileHandler';
 
 function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
   const [step, setStep] = useState(1);
+
+  const { fileSrc: profilePictureSrc, error: profilePictureError, handleViewFile: handleViewProfilePicture } = useFileHandler(employee.profilePicture);
 
   const formatDate = (date) => {
     return date ? new Date(date).toISOString().split('T')[0] : 'N/A';
@@ -16,10 +19,17 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
       case 1:
         return (
           <>
-            <img
-              src={employee.profilePicture ? `/api/employees/files/${employee.profilePicture}` : 'https://via.placeholder.com/96?text=User'}
-              alt="Profile"
-            />
+            <div className="flex justify-center mb-4">
+              {profilePictureError ? (
+                <p className="text-red-500">Failed to load profile picture</p>
+              ) : (
+                <img
+                  src={profilePictureSrc || 'https://via.placeholder.com/96?text=User'}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover"
+                />
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <strong>Employee No.:</strong> {employee.employeeId}
@@ -182,9 +192,16 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
               <div key={index}>
                 <strong>{doc.label}:</strong>{' '}
                 {employee.documents?.includes(doc.id) || (doc.id === 'profilePicture' && employee.profilePicture) ? (
-                  <a href={`/api/employees/files/${employee[doc.id] || employee.documents.find(id => id === doc.id)}`} target="_blank" rel="noopener noreferrer">
-                    View
-                  </a>
+                  doc.id === 'profilePicture' ? (
+                    <button
+                      onClick={handleViewProfilePicture}
+                      className="text-blue-600 hover:underline"
+                    >
+                      View
+                    </button>
+                  ) : (
+                    <FileViewer fileId={employee[doc.id] || employee.documents.find(id => id === doc.id)} />
+                  )
                 ) : (
                   'Not Uploaded'
                 )}
@@ -241,6 +258,18 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
     }
   };
 
+  const FileViewer = ({ fileId }) => {
+    const { handleViewFile } = useFileHandler(fileId);
+    return (
+      <button
+        onClick={handleViewFile}
+        className="text-blue-600 hover:underline"
+      >
+        View
+      </button>
+    );
+  };
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-4xl">
@@ -254,7 +283,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
           transition={{ duration: 0.5 }}
         >
           <Card className="bg-white shadow-lg border-none">
-            <CardContent className="p-6">
+            <CardContent className="p-6 max-h-[80vh] overflow-y-auto">
               <div className="mb-6">
                 <h2 className="text-xl font-semibold">
                   {step === 1 && 'Basic Information'}

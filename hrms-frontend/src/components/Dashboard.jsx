@@ -8,7 +8,13 @@ import ContentLayout from './ContentLayout';
 
 function Dashboard() {
   const { user } = useContext(AuthContext);
-  const [data, setData] = useState({ totalEmployees: 0, presentToday: 0, pendingLeaves: 0 });
+  const [data, setData] = useState({
+    confirmedEmployees: 0,
+    probationEmployees: 0,
+    contractualEmployees: 0,
+    presentToday: 0,
+    pendingLeaves: 0,
+  });
   const [genderData, setGenderData] = useState([]);
   const [attendanceData, setAttendanceData] = useState([]);
   const [departmentData, setDepartmentData] = useState([]);
@@ -52,8 +58,21 @@ function Dashboard() {
             leaves: leaves.data,
           });
 
+          const allEmployees = employees.data.map(emp => {
+            if (
+              emp.status === 'Probation' &&
+              emp.confirmationDate &&
+              new Date(emp.confirmationDate) <= new Date()
+            ) {
+              return { ...emp, status: 'Confirmed' };
+            }
+            return emp;
+          });
+          
           const dashboardData = {
-            totalEmployees: employees.data.length,
+            confirmedEmployees: allEmployees.filter(emp => emp.status === 'Confirmed').length,
+            probationEmployees: allEmployees.filter(emp => emp.status === 'Probation').length,
+            contractualEmployees: allEmployees.filter(emp => emp.status === 'Contractual').length,
             presentToday: attendance.data.filter(
               (a) =>
                 a.status === 'Present' &&
@@ -269,15 +288,31 @@ function Dashboard() {
 
   return (
     <ContentLayout title="Dashboard">
-      <div className="flex flex-col items-center w-full">
+      <div className="flex flex-col items-center w-full ">
         {/* First Three Boxes */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-[900px]">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-6 w-full max-w-[1200px]">
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
             <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-blue-800 text-center">Total Employees</CardTitle>
+              <CardTitle className="text-lg font-semibold text-blue-800 text-center">Confirmed</CardTitle>
             </CardHeader>
             <CardContent className="p-2">
-              <p className="text-3xl font-bold text-blue-600 text-center">{data.totalEmployees}</p>
+              <p className="text-3xl font-bold text-blue-600 text-center">{data.confirmedEmployees}</p>
+            </CardContent>
+          </Card>
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-purple-800 text-center">Probation</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-purple-600 text-center">{data.probationEmployees}</p>
+            </CardContent>
+          </Card>
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-pink-50 to-pink-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-pink-800 text-center">Contractual</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-pink-600 text-center">{data.contractualEmployees}</p>
             </CardContent>
           </Card>
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-green-100">

@@ -1,3 +1,4 @@
+// ===== server.js =====
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
@@ -20,9 +21,8 @@ const server = http.createServer(app);
 
 // Define allowed origins
 const allowedOrigins = [
-  'http://localhost:5173', // Vite frontend (development)
-  'http://localhost:3000', // Previous frontend (optional)
-  // Add production frontend URL here
+  'http://localhost:5173',
+  'http://localhost:3000',
 ];
 
 // Configure CORS for Express
@@ -37,8 +37,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // For multipart/form-data
+app.use(express.urlencoded({ extended: true }));
 
 // Configure CORS for Socket.IO
 const io = new Server(server, {
@@ -57,6 +58,7 @@ const io = new Server(server, {
 // Global socket instance
 global._io = io;
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
@@ -64,6 +66,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/notifications', notificationRoutes);
 
+// MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');
@@ -78,6 +81,7 @@ mongoose.connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
+// Socket.io events
 io.on('connection', socket => {
   console.log('User connected:', socket.id);
 

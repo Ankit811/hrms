@@ -10,7 +10,7 @@ const rawPunchlogSchema = new mongoose.Schema({
     required: true,
   },
   LogTime: {
-    type: String, // Changed from Date to String
+    type: String, // Format: HH:MM:SS
     required: true,
   },
   Direction: {
@@ -23,5 +23,8 @@ const rawPunchlogSchema = new mongoose.Schema({
     default: false,
   },
 }, { timestamps: true });
+
+// ✅ Unique compound index to prevent duplicate punch logs
+rawPunchlogSchema.index({ UserID: 1, LogDate: 1, LogTime: 1 }, { unique: true });
 
 module.exports = mongoose.model('RawPunchlog', rawPunchlogSchema);

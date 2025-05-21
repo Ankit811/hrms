@@ -213,7 +213,7 @@ function Navbar() {
                 leaveFrom="transform opacity-100 scale-100"
                 leaveTo="transform opacity-0 scale-95"
               >
-                <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50">
+                <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50 bg-white dark:bg-black border">
                   <div className="px-4 py-2 border-b border-border">
                     <p className="text-sm font-medium text-foreground">{user.name || 'Guest'}</p>
                     <p className="text-xs text-muted-foreground">{user.email || 'No email'}</p>

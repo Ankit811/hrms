@@ -10,6 +10,21 @@ api.interceptors.request.use(config => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+},
+  (error) => Promise.reject(error)
+);
+
+// Utility function to fetch a file as a blob
+export const fetchFileAsBlob = async (fileId) => {
+  try {
+    const response = await api.get(`/employees/files/${fileId}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching file ${fileId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
 
 export default api;

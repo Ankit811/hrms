@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import api from '../services/api';
+import { useFileHandler } from '../hooks/useFileHandler';
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -177,9 +178,38 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
   const handleFileChange = (e) => {
     const { name, files: fileList } = e.target;
     if (fileList[0]) {
-      console.log(`File selected for ${name}:`, fileList[0].name);
-      setFiles(prev => ({ ...prev, [name]: fileList[0] }));
-      setErrors(prev => ({ ...prev, [name]: '' }));
+      const file = fileList[0];
+      const newErrors = { ...errors };
+
+      // Validate file type and size
+      if (name === 'profilePicture') {
+        if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
+          newErrors[name] = 'Profile Picture must be a JPEG/JPG image';
+        } else if (file.size > 5 * 1024 * 1024) {
+          newErrors[name] = 'Profile Picture must be less than or equal to 5MB';
+        } else {
+          delete newErrors[name];
+        }
+      } else {
+        if (file.type !== 'application/pdf') {
+          newErrors[name] = `${name.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
+        } else {
+          // Additional size validation for PDFs
+          const maxSize = name === 'salarySlips' || name === 'panCard' || name === 'aadharCard' || name === 'bankPassbook' ? 1 * 1024 * 1024 :
+                          name === 'medicalCertificate' || name === 'backgroundVerification' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+          if (file.size > maxSize) {
+            newErrors[name] = `${name.replace(/([A-Z])/g, ' $1').trim()} must be less than or equal to ${maxSize / (1024 * 1024)}MB`;
+          } else {
+            delete newErrors[name];
+          }
+        }
+      }
+
+      setErrors(newErrors);
+      if (!newErrors[name]) {
+        console.log(`File selected for ${name}:`, file.name);
+        setFiles(prev => ({ ...prev, [name]: file }));
+      }
     }
   };
 
@@ -264,7 +294,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         newErrors.paymentType = 'Payment Type is required';
       }
       if (form.paymentType === 'Bank Transfer') {
-        const bankFields = ['bankName', 'bankBranch', 'bankBranch', 'ifscCode'];
+        const bankFields = ['bankName', 'bankBranch', 'accountNumber', 'ifscCode'];
         bankFields.forEach(field => {
           if (!form[field] || form[field].trim() === '') {
             newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
@@ -354,6 +384,19 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       console.log('Enter key pressed in form, preventing default submission');
       e.preventDefault();
     }
+  };
+
+  // Component to handle viewing files
+  const FileViewer = ({ fileId }) => {
+    const { handleViewFile } = useFileHandler(fileId);
+    return (
+      <button
+        onClick={handleViewFile}
+        className="text-blue-600 hover:underline mt-1"
+      >
+        View
+      </button>
+    );
   };
 
   const renderStep = () => {
@@ -595,6 +638,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   <SelectContent>
                     <SelectItem value="Confirmed">Confirmed</SelectItem>
                     <SelectItem value="Probation">Probation</SelectItem>
+                    <SelectItem value="Contractual">Contractual</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.status && <p className="mt-1 text-sm text-red-500">{errors.status}</p>}
@@ -749,37 +793,31 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
           {step === 4 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { label: 'Profile Picture', id: 'profilePicture' },
-                { label: '10th & 12th Certificates', id: 'tenthTwelfthDocs' },
-                { label: 'Graduation Certificates', id: 'graduationDocs' },
-                { label: 'Postgraduation/PhD Certificates', id: 'postgraduationDocs' },
-                { label: 'Experience Certificate', id: 'experienceCertificate' },
-                { label: 'Last 3 Months Salary Slips', id: 'salarySlips' },
-                { label: 'PAN Card', id: 'panCard' },
-                { label: 'Aadhar Card', id: 'aadharCard' },
-                { label: 'Bank Passbook/Cancelled Cheque', id: 'bankPassbook' },
-                { label: 'Medical Fitness Certificate', id: 'medicalCertificate' },
-                { label: 'Background Verification', id: 'backgroundVerification' },
+                { label: 'Profile Picture', id: 'profilePicture', accept: 'image/jpeg,image/jpg' },
+                { label: '10th & 12th Certificates', id: 'tenthTwelfthDocs', accept: 'application/pdf' },
+                { label: 'Graduation Certificates', id: 'graduationDocs', accept: 'application/pdf' },
+                { label: 'Postgraduation/PhD Certificates', id: 'postgraduationDocs', accept: 'application/pdf' },
+                { label: 'Experience Certificate', id: 'experienceCertificate', accept: 'application/pdf' },
+                { label: 'Last 3 Months Salary Slips', id: 'salarySlips', accept: 'application/pdf', conditional: true },
+                { label: 'PAN Card', id: 'panCard', accept: 'application/pdf' },
+                { label: 'Aadhar Card', id: 'aadharCard', accept: 'application/pdf' },
+                { label: 'Bank Passbook/Cancelled Cheque', id: 'bankPassbook', accept: 'application/pdf' },
+                { label: 'Medical Fitness Certificate', id: 'medicalCertificate', accept: 'application/pdf' },
+                { label: 'Background Verification', id: 'backgroundVerification', accept: 'application/pdf' },
               ].map((doc, index) => (
-                <div key={index} className="flex flex-col">
+                <div key={index} className={doc.conditional && !employee.documents?.includes('experienceCertificate') && !files.experienceCertificate ? 'hidden' : 'flex flex-col'}>
                   <strong className="mb-1">{doc.label}:</strong>
+                  {(form[doc.id] || (doc.id === 'profilePicture' && employee.profilePicture)) && (
+                    <FileViewer fileId={form[doc.id] || employee.profilePicture} />
+                  )}
                   <Input
                     name={doc.id}
                     type="file"
-                    accept={doc.id === 'profilePicture' ? 'image/jpeg,image/jpg' : 'application/pdf'}
+                    accept={doc.accept}
                     onChange={handleFileChange}
-                    className={errors[doc.id] ? 'border-red-500' : ''}
+                    className={errors[doc.id] ? 'border-red-500 mt-1' : 'mt-1'}
+                    required={doc.id !== 'postgraduationDocs' && doc.id !== 'experienceCertificate' && (!doc.conditional || (employee.documents?.includes('experienceCertificate') || files.experienceCertificate))}
                   />
-                  {(form[doc.id] || (doc.id === 'profilePicture' && employee.profilePicture)) && (
-                    <a
-                      href={`/api/employees/files/${form[doc.id] || employee.profilePicture}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline mt-1"
-                    >
-                      View
-                    </a>
-                  )}
                   {errors[doc.id] && <p className="mt-1 text-sm text-red-500">{errors[doc.id]}</p>}
                 </div>
               ))}

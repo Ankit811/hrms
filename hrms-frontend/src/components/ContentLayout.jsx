@@ -8,7 +8,7 @@ function ContentLayout({ title, children }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="sm:ml-0 md:ml-[240px] sm:p-2 md:p-4 bg-gray-50 min-h-[calc(100vh-64px)] mt-16 flex flex-col items-center sm:w-full md:w-[calc(100%-240px)] box-border overflow-x-hidden"
+      className="p-4 pt-8 h-[calc(100vh-64px)] flex flex-col items-center w-full box-border overflow-x-hidden overflow-y-auto"
     >
       <motion.h1
         initial={{ opacity: 0, x: -20 }}
@@ -18,7 +18,7 @@ function ContentLayout({ title, children }) {
       >
         {title}
       </motion.h1>
-      <Card className="w-full max-w-[1200px] bg-white shadow-lg border-none">
+      <Card className="w-full max-w-[1200px] shadow-lg border">
         <CardContent className="p-6 flex justify-center">
           <motion.div
             initial={{ opacity: 0 }}

@@ -1,15 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const multer = require('multer');
 const Employee = require('../models/Employee');
 const Department = require('../models/Department');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const Audit = require('../models/Audit');
-const multer = require('multer');
-const { GridFsStorage } = require('multer-gridfs-storage');
-const crypto = require('crypto');
-const path = require('path');
+const { upload, uploadToGridFS, gfsReady } = require('../middleware/fileupload');
 require('dotenv').config();
 
 // Initialize dedicated GridFS connection
@@ -25,73 +23,9 @@ conn.once('open', () => {
   gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'Uploads' });
 });
 
-// Configure Multer with GridFS Storage (once at startup)
-const storage = new GridFsStorage({
-  db: conn,
-  options: {}, // Remove deprecated options
-  file: (req, file) => {
-    console.log('Processing file:', file);
-    return new Promise((resolve, reject) => {
-      crypto.randomBytes(16, (err, buf) => {
-        if (err) {
-          console.error('Error generating filename:', err);
-          return reject(err);
-        }
-        const filename = buf.toString('hex') + path.extname(file.originalname);
-        const fileInfo = {
-          filename,
-          bucketName: 'Uploads',
-          metadata: {
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            fieldname: file.fieldname,
-            employeeId: req.body.employeeId || req.params.id || 'unknown',
-          },
-        };
-        console.log('File info prepared:', fileInfo);
-        resolve(fileInfo);
-      });
-    });
-  },
-});
-
-// Log storage events
-storage.on('connection', () => {
-  console.log('Multer-GridFS-Storage connected to MongoDB');
-});
-storage.on('connectionError', (err) => {
-  console.error('Multer-GridFS-Storage connection error:', err);
-});
-storage.on('streamError', (err) => {
-  console.error('Multer-GridFS-Storage stream error:', err);
-});
-
-// Multer upload middleware
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    console.log('File received in filter:', file);
-    const isProfilePicture = file.fieldname === 'profilePicture';
-    const isJpeg = isProfilePicture && (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg');
-    const isPdf = !isProfilePicture && file.mimetype === 'application/pdf';
-
-    if (!isJpeg && !isPdf) {
-      console.log('File rejected:', file.mimetype);
-      return cb(
-        new Error(
-          `Invalid file type for ${file.fieldname}. Only ${isProfilePicture ? 'JPEG/JPG images' : 'PDF files'} are allowed.`
-        )
-      );
-    }
-    console.log('File accepted:', file.mimetype);
-    cb(null, true);
-  },
-});
-
 // Middleware to check gfs readiness
 const ensureGfs = (req, res, next) => {
-  if (!gfs) {
+  if (!gfsReady()) {
     console.error('GridFS not initialized');
     return res.status(500).json({ message: 'GridFS not initialized. Please try again later.' });
   }
@@ -126,7 +60,7 @@ const checkForFiles = (req, res, next) => {
       { name: 'bankPassbook', maxCount: 1 },
       { name: 'medicalCertificate', maxCount: 1 },
       { name: 'backgroundVerification', maxCount: 1 },
-    ])(req, res, (err) => {
+    ])(req, res, async (err) => {
       if (err instanceof multer.MulterError) {
         console.error('Multer error:', err);
         return res.status(400).json({ message: `Multer error: ${err.message}` });
@@ -135,11 +69,47 @@ const checkForFiles = (req, res, next) => {
         console.error('Upload error:', err);
         return res.status(400).json({ message: `Upload error: ${err.message}` });
       }
-      next();
+      // Manually upload files to GridFS
+      req.uploadedFiles = {};
+      try {
+        if (!req.files || Object.keys(req.files).length === 0) {
+          console.log('No files provided in request');
+          return next();
+        }
+        for (const field of Object.keys(req.files)) {
+          req.uploadedFiles[field] = [];
+          for (const file of req.files[field]) {
+            if (!file.buffer || !file.originalname || !file.mimetype) {
+              console.error(`Invalid file data for ${field}:`, file);
+              return res.status(400).json({ message: `Invalid file data for ${field}` });
+            }
+            console.log(`Uploading file: ${file.originalname} (${file.fieldname})`);
+            const uploadedFile = await uploadToGridFS(file, {
+              originalname: file.originalname,
+              mimetype: file.mimetype,
+              fieldname: file.fieldname,
+              employeeId: req.body.employeeId || req.params.id || 'unknown',
+            });
+            if (!uploadedFile || !uploadedFile._id) {
+              console.error(`GridFS upload failed for ${file.originalname}: No _id returned`);
+              return res.status(500).json({ message: `GridFS upload failed for ${file.originalname}` });
+            }
+            console.log(`File uploaded successfully: ${uploadedFile._id}`);
+            req.uploadedFiles[field].push({
+              id: uploadedFile._id,
+              filename: uploadedFile.filename,
+            });
+          }
+        }
+        next();
+      } catch (uploadErr) {
+        console.error('GridFS upload error:', uploadErr);
+        return res.status(500).json({ message: 'File upload to GridFS failed', error: uploadErr.message });
+      }
     });
   } else {
     console.log('No files detected, skipping multer');
-    req.files = {}; // Ensure req.files is defined
+    req.uploadedFiles = {};
     next();
   }
 };
@@ -202,10 +172,10 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForFiles, async (req, res) => {
   try {
     console.log('Received POST request body:', req.body);
-    console.log('Received files:', req.files);
+    console.log('Received files:', req.uploadedFiles);
     const {
       employeeId, userId, email, password, name, dateOfBirth, fatherName, motherName,
-      mobileNumber, permanentAddress, currentAddress, aadharNumber, gender, maritalStatus, 
+      mobileNumber, permanentAddress, currentAddress, aadharNumber, gender, maritalStatus,
       spouseName, emergencyContactName, emergencyContactNumber, dateOfJoining, reportingManager,
       status, probationPeriod, confirmationDate, referredBy, loginType,
       designation, location, department, employeeType, panNumber, pfNumber,
@@ -215,9 +185,9 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
     // Validate required fields
     const requiredFields = [
       'employeeId', 'userId', 'email', 'password', 'name', 'dateOfBirth', 'fatherName',
-      'motherName', 'mobileNumber', 'permanentAddress', 'currentAddress', 'aadharNumber', 
-      'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber', 
-      'dateOfJoining', 'reportingManager', 'status', 'loginType', 'designation', 
+      'motherName', 'mobileNumber', 'permanentAddress', 'currentAddress', 'aadharNumber',
+      'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber',
+      'dateOfJoining', 'reportingManager', 'status', 'loginType', 'designation',
       'location', 'department', 'employeeType', 'panNumber', 'paymentType'
     ];
     for (const field of requiredFields) {
@@ -245,7 +215,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
     if (!/^\d{10}$/.test(mobileNumber)) {
       return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits' });
     }
-    if (password.length < 6) {
+    if (password && password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
     if (!/^[A-Z0-9]{10}$/.test(panNumber)) {
@@ -267,7 +237,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
     const reportingManagerExists = await Employee.findById(reportingManager);
     if (!reportingManagerExists) return res.status(400).json({ message: 'Invalid reporting manager' });
 
-    const files = req.files || {};
+    const files = req.uploadedFiles || {};
     console.log('Processed files:', files);
     if (!files.profilePicture && Object.keys(files).length === 0) {
       console.warn('No files uploaded');
@@ -361,7 +331,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
 router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (req, res) => {
   try {
     console.log('Received PUT request body:', req.body);
-    console.log('Received files:', req.files);
+    console.log('Received files:', req.uploadedFiles);
     const employee = await Employee.findById(req.params.id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
@@ -373,13 +343,14 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     }
 
     const updates = req.body;
-    const files = req.files || {};
+    const files = req.uploadedFiles || {};
 
     // Log file details for debugging
     if (files.profilePicture) {
       console.log('Profile picture details:', files.profilePicture);
       if (!files.profilePicture[0]?.id) {
         console.error('Profile picture file ID is missing');
+        return res.status(500).json({ message: 'Failed to process profile picture upload' });
       }
     }
 

@@ -9,6 +9,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import ContentLayout from './ContentLayout';
+import { useFileHandler } from '../hooks/useFileHandler'; // Import the new hook
 
 function Profile() {
   const { user } = useContext(AuthContext);
@@ -73,6 +74,9 @@ function Profile() {
   const [error, setError] = useState(null);
   const [fileErrors, setFileErrors] = useState({});
   const [step, setStep] = useState(1);
+
+  // Use the hook to fetch and display the profile picture
+  const { fileSrc: profilePictureSrc, error: profilePictureError, handleViewFile: handleViewProfilePicture } = useFileHandler(profile.profilePicture);
 
   const lockedFields = [
     'employeeId',
@@ -162,8 +166,37 @@ function Profile() {
   const handleChange = (e) => {
     const { name, value, files: fileList } = e.target;
     if (fileList && fileList[0]) {
-      setFiles({ ...files, [name]: fileList[0] });
-      setFileErrors({ ...fileErrors, [name]: '' });
+      const file = fileList[0];
+      const newErrors = { ...fileErrors };
+
+      // Validate file type and size
+      if (name === 'profilePicture') {
+        if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
+          newErrors[name] = 'Profile Picture must be a JPEG/JPG image';
+        } else if (file.size > 5 * 1024 * 1024) {
+          newErrors[name] = 'Profile Picture must be less than or equal to 5MB';
+        } else {
+          delete newErrors[name];
+        }
+      } else {
+        if (file.type !== 'application/pdf') {
+          newErrors[name] = `${name.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
+        } else {
+          // Additional size validation for PDFs
+          const maxSize = name === 'salarySlips' || name === 'panCard' || name === 'aadharCard' || name === 'bankPassbook' ? 1 * 1024 * 1024 :
+                          name === 'medicalCertificate' || name === 'backgroundVerification' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+          if (file.size > maxSize) {
+            newErrors[name] = `${name.replace(/([A-Z])/g, ' $1').trim()} must be less than or equal to ${maxSize / (1024 * 1024)}MB`;
+          } else {
+            delete newErrors[name];
+          }
+        }
+      }
+
+      setFileErrors(newErrors);
+      if (!newErrors[name]) {
+        setFiles({ ...files, [name]: file });
+      }
     } else if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setProfile({
@@ -264,17 +297,34 @@ function Profile() {
     }
   };
 
+  // Component to handle viewing files
+  const FileViewer = ({ fileId }) => {
+    const { handleViewFile } = useFileHandler(fileId);
+    return (
+      <button
+        onClick={handleViewFile}
+        className="text-blue-600 hover:underline block mt-1"
+      >
+        View
+      </button>
+    );
+  };
+
   const renderStep = () => {
     switch (step) {
       case 1:
         return (
           <>
             <div className="flex justify-center mb-4">
-              <img
-                src={profile.profilePicture ? `/api/employees/files/${profile.profilePicture}` : 'https://via.placeholder.com/96?text=User'}
-                alt="Profile"
-                className="w-24 h-24 rounded-full object-cover border border-gray-200"
-              />
+              {profilePictureError ? (
+                <p className="text-red-500">Failed to load profile picture</p>
+              ) : (
+                <img
+                  src={profilePictureSrc || 'https://via.placeholder.com/96?text=User'}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover border border-gray-200"
+                />
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -695,19 +745,21 @@ function Profile() {
               { id: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque (PDF, 1MB)', accept: 'application/pdf' },
               { id: 'medicalCertificate', label: 'Medical Fitness Certificate (PDF, 2MB)', accept: 'application/pdf' },
               { id: 'backgroundVerification', label: 'Background Verification (PDF, 2MB)', accept: 'application/pdf' },
-              { id: 'profilePicture', label: 'Profile Picture', accept: 'image/*' },
+              { id: 'profilePicture', label: 'Profile Picture', accept: 'image/jpeg,image/jpg' },
             ].map((doc, index) => (
               <div key={index} className={doc.conditional && !profile.documents.includes('experienceCertificate') && !files.experienceCertificate ? 'hidden' : ''}>
                 <Label htmlFor={doc.id}>{doc.label}</Label>
                 {profile.documents.includes(doc.id) || (doc.id === 'profilePicture' && profile.profilePicture) ? (
-                  <a
-                    href={`/api/employees/files/${profile[doc.id] || profile.documents.find(id => id === doc.id)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline block mt-1"
-                  >
-                    View
-                  </a>
+                  doc.id === 'profilePicture' ? (
+                    <button
+                      onClick={handleViewProfilePicture}
+                      className="text-blue-600 hover:underline block mt-1"
+                    >
+                      View
+                    </button>
+                  ) : (
+                    <FileViewer fileId={profile[doc.id] || profile.documents.find(id => id === doc.id)} />
+                  )
                 ) : (
                   <>
                     <Input

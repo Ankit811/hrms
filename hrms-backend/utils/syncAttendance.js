@@ -1,135 +1,140 @@
-const sql = require('mssql');
+// utils/syncAttendance.js
+
+const { connectSQL, sql } = require('../config/sql');
 const RawPunchlog = require('../models/RawPunchlog');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
+const SyncMetadata = require('../models/SyncMetadata');
 
 const syncAttendance = async () => {
   try {
-    const fromDate = new Date('2025-04-29');
-    fromDate.setHours(0, 1, 0, 0);
-    const toDate = new Date('2025-04-29');
-    toDate.setHours(23, 59, 0, 0);
+    // Step 1: Fetch or initialize lastSyncedAt
+    let syncMeta = await SyncMetadata.findOne({ name: 'attendanceSync' });
 
-    const formatDateTime = date =>
+    if (!syncMeta) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      syncMeta = await SyncMetadata.create({ name: 'attendanceSync', lastSyncedAt: yesterday });
+    }
+
+    const fromDate = new Date(syncMeta.lastSyncedAt);
+    const toDate = new Date();
+
+    const formatDateTime = (date) =>
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
-    const fromDateTime = formatDateTime(fromDate);
-    const toDateTime = formatDateTime(toDate);
+    console.log(`🔄 Syncing attendance from ${formatDateTime(fromDate)} to ${formatDateTime(toDate)}`);
 
-    console.log(`Syncing attendance from ${fromDateTime} to ${toDateTime}`);
-
-    // Database connection configuration
-    const dbConfig = {
-      user: 'essl',
-      password: 'essl',
-      server: 'DESKTOP-S41L8IE\\SQLEXPRESS',
-      database: 'etimetracklite1old',
-      options: {
-        trustServerCertificate: true, // For local development
-      },
-      driver: 'ODBC Driver 17 for SQL Server',
-    };
-
-    // Connect to the database
-    const pool = await sql.connect(dbConfig);
-    console.log('Connected to SQL Server database');
-
-    // Query to fetch punch logs
+    // Step 2: Fetch punch logs from SQL
+    const pool = await connectSQL();
     const query = `
       SELECT UserID, LogDate, LogTime, Direction
       FROM Punchlogs
-      WHERE LogDate BETWEEN @fromDate AND @toDate
+      WHERE LogDate >= '${fromDate.toISOString().split('T')[0]}'
     `;
-    const request = pool.request();
-    request.input('fromDate', sql.DateTime, fromDate);
-    request.input('toDate', sql.DateTime, toDate);
+    const result = await pool.request().query(query);
+    const records = result.recordset;
 
-    const result = await request.query(query);
-    const rawData = result.recordset;
-
-    console.log('Raw database response:', rawData);
-
-    await pool.close();
-
-    if (!rawData || rawData.length === 0) {
-      console.log('No transaction logs found.');
+    if (!records || records.length === 0) {
+      console.log('⚠️ No new punch logs found.');
       return;
     }
 
-    // Map database results to punchLogs format
-    let punchLogs = rawData.map(log => ({
-      UserID: log.UserID,
-      LogDate: new Date(log.LogDate),
-      LogTime: log.LogTime,
-      Direction: log.Direction || 'out',
-    }));
+    // Step 3: Normalize and deduplicate logs
+    let punchLogs = records.map((log) => {
+      let logTime = log.LogTime;
 
-    console.log('Raw punch logs to store:', punchLogs);
+      if (typeof logTime === 'number') {
+        const h = Math.floor(logTime / 3600);
+        const m = Math.floor((logTime % 3600) / 60);
+        const s = logTime % 60;
+        logTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      } else if (logTime instanceof Date) {
+        logTime = logTime.toISOString().split('T')[1].substring(0, 8);
+      } else if (typeof logTime === 'string' && !/^\d{2}:\d{2}:\d{2}$/.test(logTime)) {
+        return null;
+      }
 
-    if (punchLogs.length === 0) {
-      console.log('No punch logs parsed from response.');
-      return;
+      return {
+        UserID: log.UserID?.toString().trim(),
+        LogDate: new Date(log.LogDate),
+        LogTime: logTime,
+        Direction: (log.Direction || 'out').toLowerCase(),
+        processed: false,
+      };
+    }).filter((log) => log && log.UserID && log.LogTime && !isNaN(log.LogDate));
+
+    // Step 4: Deduplicate in-memory
+    punchLogs = [...new Map(punchLogs.map((log) =>
+      [`${log.UserID}_${log.LogDate.toISOString()}_${log.LogTime}`, log]
+    )).values()];
+
+    // Step 5: Insert only new logs in RawPunchlog
+    const newLogs = [];
+    for (const log of punchLogs) {
+      const exists = await RawPunchlog.exists({
+        UserID: log.UserID,
+        LogDate: log.LogDate,
+        LogTime: log.LogTime
+      });
+      if (!exists) newLogs.push(log);
     }
 
-    await RawPunchlog.insertMany(punchLogs);
-    console.log('Raw punch logs stored in MongoDB');
-
-    if (!Employee || typeof Employee.find !== 'function') {
-      console.error('❌ Employee model is undefined or broken');
-      return;
+    if (newLogs.length > 0) {
+      await RawPunchlog.insertMany(newLogs);
+      console.log(`✅ ${newLogs.length} new punch logs inserted.`);
+    } else {
+      console.log('⚠️ No new punch logs to insert.');
     }
 
+    // Step 6: Process logs and sync attendance
     const employees = await Employee.find();
-    console.log('Fetched employees:', employees);
-
     const rawLogs = await RawPunchlog.find({ processed: false });
     const logsByUser = {};
 
     rawLogs.forEach(log => {
-      const key = `${log.UserID.trim()}_${log.LogDate.toISOString().split('T')[0]}`;
+      const key = `${log.UserID}_${log.LogDate.toISOString().split('T')[0]}`;
       if (!logsByUser[key]) logsByUser[key] = [];
       logsByUser[key].push(log);
     });
 
     for (const key in logsByUser) {
-      const logs = logsByUser[key].sort((a, b) => {
-        const timeA = new Date(`1970-01-01T${a.LogTime}Z`);
-        const timeB = new Date(`1970-01-01T${b.LogTime}Z`);
-        return timeA - timeB;
-      });
+      const logs = logsByUser[key].sort((a, b) =>
+        new Date(`1970-01-01T${a.LogTime}Z`) - new Date(`1970-01-01T${b.LogTime}Z`)
+      );
 
       const userId = logs[0].UserID.trim();
       const employee = employees.find(emp => emp.userId.toString() === userId);
 
       if (!employee) {
-        console.log(`No matching employee for UserID: ${userId}`);
+        console.log(`⚠️ No employee found for UserID: ${userId}`);
         continue;
       }
 
-      const firstLog = logs[0];
+      // First log as IN
       await Attendance.create({
         employeeId: employee.employeeId,
         userId: employee.userId,
         name: employee.name,
-        logDate: firstLog.LogDate,
-        logTime: firstLog.LogTime,
+        logDate: logs[0].LogDate,
+        logTime: logs[0].LogTime,
         direction: 'IN',
         status: 'Present',
       });
-      console.log(`Synced IN for ${employee.name} at ${firstLog.LogTime}`);
 
-      const lastLog = logs[logs.length - 1];
+      // Last log as OUT
       await Attendance.create({
         employeeId: employee.employeeId,
         userId: employee.userId,
         name: employee.name,
-        logDate: lastLog.LogDate,
-        logTime: lastLog.LogTime,
+        logDate: logs[logs.length - 1].LogDate,
+        logTime: logs[logs.length - 1].LogTime,
         direction: 'OUT',
         status: 'Present',
       });
-      console.log(`Synced OUT for ${employee.name} at ${lastLog.LogTime}`);
 
+      // Mark logs as processed
       for (const log of logs) {
         log.processed = true;
         await log.save();
@@ -137,10 +142,19 @@ const syncAttendance = async () => {
     }
 
     await RawPunchlog.deleteMany({ processed: true });
-    console.log('Attendance synced successfully and processed logs cleared');
+
+    // ✅ Update sync time
+    await SyncMetadata.findOneAndUpdate(
+      { name: 'attendanceSync' },
+      { lastSyncedAt: new Date() }
+    );
+
+    console.log('✅ Attendance sync complete and metadata updated.');
+
   } catch (err) {
-    console.error('Attendance sync error:', err.message);
+    console.error('❌ Attendance sync error:', err.message, err.stack);
   }
 };
 
 module.exports = { syncAttendance };
+

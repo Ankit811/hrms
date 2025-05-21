@@ -21,6 +21,7 @@ export default function ThemeContextProvider({ children }) {
     console.log('data-theme set to:', mode);
     // Debugging: Log the current data-theme attribute
     console.log('Current data-theme on <html>:', document.documentElement.getAttribute('data-theme'));
+    document.documentElement.classList.toggle('dark')
   }, [mode]);
 
   return (
