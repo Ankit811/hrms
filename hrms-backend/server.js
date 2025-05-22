@@ -19,13 +19,13 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Define allowed origins
+// ✅ Updated allowedOrigins for Vite dev server
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
 ];
 
-// Configure CORS for Express
+// Express CORS
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -41,7 +41,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configure CORS for Socket.IO
+// Socket.IO CORS
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
@@ -55,10 +55,8 @@ const io = new Server(server, {
   },
 });
 
-// Global socket instance
 global._io = io;
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
@@ -66,7 +64,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// MongoDB connection
+// MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');

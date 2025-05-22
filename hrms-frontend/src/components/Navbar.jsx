@@ -91,7 +91,7 @@ function Navbar() {
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 120 }}
-        className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50"
+        className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 "
       >
         <div className="flex items-center justify-between h-full px-4 md:px-6">
           <motion.img
@@ -114,7 +114,7 @@ function Navbar() {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ type: 'spring', stiffness: 120 }}
-      className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50"
+      className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 dark:bg-gray-500 rounded-md"
     >
       <div className="flex items-center justify-between h-full px-4 md:px-6">
         {/* Left Section: Logo and Tabs */}

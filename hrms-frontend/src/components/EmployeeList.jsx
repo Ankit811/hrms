@@ -9,6 +9,7 @@ import api from '../services/api';
 import ContentLayout from './ContentLayout';
 import EmployeeDetails from './EmployeeDetails';
 import EmployeeUpdateForm from './EmployeeUpdateForm';
+import Pagination from './Pagination';
 
 function EmployeeList() {
   console.log('EmployeeList component rendered');
@@ -22,6 +23,8 @@ function EmployeeList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -123,6 +126,11 @@ function EmployeeList() {
     return filtered;
   }, [employees, search, departmentFilter, loginType]);
 
+  const paginatedEmployees = filteredEmployees.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this employee?')) return;
     try {
@@ -145,9 +153,19 @@ function EmployeeList() {
   };
 
   const handleUpdateSuccess = (updatedEmployee) => {
-    console.log('handleUpdateSuccess called, updatedEmployee:', updatedEmployee);
-    setEmployees(employees.map(emp => emp._id === updatedEmployee._id ? updatedEmployee : emp));
-  };
+  console.log('handleUpdateSuccess called, updatedEmployee:', updatedEmployee);
+
+  // Ensure department is populated
+  if (typeof updatedEmployee.department === 'string') {
+    updatedEmployee.department = departments.find(d => d._id === updatedEmployee.department);
+  }
+
+  setEmployees((prevEmployees) =>
+    prevEmployees.map(emp =>
+      emp._id === updatedEmployee._id ? { ...emp, ...updatedEmployee } : emp
+    )
+  );
+};
 
   console.log('Rendering EmployeeList, loading:', loading, 'error:', error, 'employees:', employees.length);
 
@@ -225,6 +243,7 @@ function EmployeeList() {
               )}
             </div>
           ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -235,7 +254,7 @@ function EmployeeList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEmployees.map(emp => (
+                {paginatedEmployees.map(emp => (
                   <TableRow key={emp._id}>
                     <TableCell>{emp.employeeId}</TableCell>
                     <TableCell>{emp.name}</TableCell>
@@ -266,6 +285,17 @@ function EmployeeList() {
                 ))}
               </TableBody>
             </Table>
+            <Pagination
+              currentPage={currentPage}
+              itemsPerPage={itemsPerPage}
+              totalItems={filteredEmployees.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => {
+                setItemsPerPage(size);
+                setCurrentPage(1);
+              }}
+            />
+            </>
           )}
           {showDetails && selectedEmployeeForDetails && (
             <EmployeeDetails

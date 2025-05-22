@@ -489,8 +489,9 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
       } : {};
     }
 
-    const updatedEmployee = await employee.save();
+    const updatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
     console.log('Employee updated:', updatedEmployee.employeeId);
+    res.json(updatedEmployee)
 
     try {
       await Audit.create({
@@ -584,8 +585,9 @@ router.patch('/:id/lock', auth, role(['Admin']), async (req, res) => {
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
     employee.locked = !employee.locked;
-    const updatedEmployee = await employee.save();
+    const updatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
     console.log(`Employee ${employee.employeeId} lock toggled to: ${employee.locked}`);
+    res.json(updatedEmployee)
 
     try {
       await Audit.create({
@@ -618,8 +620,9 @@ router.patch('/:id/lock-section', auth, role(['Admin']), async (req, res) => {
 
     const lockField = `${section}Locked`;
     employee[lockField] = !employee[lockField];
-    const updatedEmployee = await employee.save();
+    const updatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
     console.log(`Section ${section} lock toggled for employee ${employee.employeeId} to: ${employee[lockField]}`);
+    res.json(updatedEmployee)
 
     try {
       await Audit.create({

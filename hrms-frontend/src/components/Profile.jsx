@@ -469,7 +469,7 @@ function Profile() {
                   value={profile.gender}
                   onChange={handleChange}
                   disabled={isLocked}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                  className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100 bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
                   <option value="Male">Male</option>
@@ -485,7 +485,7 @@ function Profile() {
                   value={profile.maritalStatus}
                   onChange={handleChange}
                   disabled={isLocked}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                  className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100 bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
                   <option value="Single">Single</option>
@@ -562,7 +562,7 @@ function Profile() {
                   value={profile.status}
                   onChange={handleChange}
                   disabled={lockedFields.includes('status')}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                  className="mt-1 block w-full rounded-md border shadow-sm bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
                   <option value="Active">Active</option>
@@ -790,7 +790,7 @@ function Profile() {
                 value={profile.paymentType}
                 onChange={handleChange}
                 disabled={lockedFields.includes('paymentType')}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100"
+                className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 bg-white dark:bg-black"
               >
                 <option value="">Select</option>
                 <option value="Cash">Cash</option>
@@ -880,7 +880,7 @@ function Profile() {
         transition={{ duration: 0.5 }}
         className="max-w-4xl mx-auto"
       >
-        <Card className="bg-white shadow-lg border-none">
+        <Card className="shadow-lg border">
           <CardContent className="p-6">
             <form onSubmit={handleSubmit}>
               <div className="mb-6">

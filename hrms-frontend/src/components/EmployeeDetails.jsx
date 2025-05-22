@@ -272,7 +272,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl bg-white dark:bg-black">
         <DialogTitle>Employee Details</DialogTitle>
         <DialogDescription>
           View the details of the employee below. Navigate through the steps to see all sections.
@@ -282,7 +282,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Card className="bg-white shadow-lg border-none">
+          <Card className="bg-white dark:bg-black shadow-lg border">
             <CardContent className="p-6 max-h-[80vh] overflow-y-auto">
               <div className="mb-6">
                 <h2 className="text-xl font-semibold">

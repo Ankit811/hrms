@@ -41,6 +41,7 @@ function Notification() {
               )}
             </div>
           </Popover.Button>
+
           <Transition
             as={React.Fragment}
             enter="transition ease-out duration-200"
@@ -50,21 +51,17 @@ function Notification() {
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-popover text-popover-foreground rounded-lg shadow-xl z-50">
+            <Popover.Panel className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg shadow-xl z-50 bg-popover text-popover-foreground border border-border">
               <div className="p-2">
                 {notifications.length === 0 ? (
-                  <div className="px-4 py-2 text-foreground font-medium">
-                    No notifications
-                  </div>
+                  <div className="px-4 py-2 font-medium text-foreground">No notifications</div>
                 ) : (
                   notifications.map((n) => (
                     <div
                       key={n._id}
                       className="px-4 py-2 border-b border-border last:border-b-0"
                     >
-                      <p className="text-sm font-medium text-foreground">
-                        {n.message}
-                      </p>
+                      <p className="text-sm font-medium text-foreground">{n.message}</p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(n.createdAt).toLocaleString()}
                       </p>

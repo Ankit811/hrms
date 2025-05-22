@@ -18,10 +18,11 @@ export default function ThemeContextProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', mode);
-    console.log('data-theme set to:', mode);
-    // Debugging: Log the current data-theme attribute
-    console.log('Current data-theme on <html>:', document.documentElement.getAttribute('data-theme'));
-    document.documentElement.classList.toggle('dark')
+    if (mode === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, [mode]);
 
   return (
