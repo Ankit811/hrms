@@ -1,18 +1,10 @@
-// File: middleware/fileupload.js
+// middleware/fileupload.js
 const multer = require('multer');
 const { Readable } = require('stream');
-const mongoose = require('mongoose');
-require('dotenv').config();
-
-const conn = mongoose.createConnection(process.env.MONGO_URI);
-let gfs;
-
-conn.once('open', () => {
-  gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'Uploads' });
-  console.log('GridFS initialized manually');
-});
+const { getGfs, gfsReady } = require('../utils/gridfs');
 
 const storage = multer.memoryStorage();
+
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
@@ -34,12 +26,18 @@ const upload = multer({
 
 const uploadToGridFS = (file, metadata = {}) => {
   return new Promise((resolve, reject) => {
+    if (!gfsReady()) {
+      return reject(new Error('GridFS is not initialized'));
+    }
+    const gfs = getGfs();
     const readableStream = Readable.from(file.buffer);
     const uploadStream = gfs.openUploadStream(file.originalname, {
       contentType: file.mimetype,
-      metadata,
+      metadata: {
+        ...metadata,
+        fieldname: file.fieldname, // Store the field name (e.g., 'tenthTwelfthDocs')
+      },
     });
-
     readableStream.pipe(uploadStream)
       .on('error', (err) => {
         console.error('Upload stream error:', err);
@@ -55,5 +53,5 @@ const uploadToGridFS = (file, metadata = {}) => {
 module.exports = {
   upload,
   uploadToGridFS,
-  gfsReady: () => !!gfs,
+  gfsReady,
 };

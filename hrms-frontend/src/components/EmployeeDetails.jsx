@@ -1,17 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import api from '../services/api';
 import { useFileHandler } from '../hooks/useFileHandler';
 
 function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
   const [step, setStep] = useState(1);
-
+  const [documentMetadata, setDocumentMetadata] = useState([]);
   const { fileSrc: profilePictureSrc, error: profilePictureError, handleViewFile: handleViewProfilePicture } = useFileHandler(employee.profilePicture);
+
+  // Fetch document metadata
+  useEffect(() => {
+    const fetchDocumentMetadata = async () => {
+      try {
+        const response = await api.get(`/employees/${employee._id}/documents`);
+        setDocumentMetadata(response.data);
+      } catch (err) {
+        console.error('Error fetching document metadata:', err);
+      }
+    };
+    if (employee._id) {
+      fetchDocumentMetadata();
+    }
+  }, [employee._id]);
 
   const formatDate = (date) => {
     return date ? new Date(date).toISOString().split('T')[0] : 'N/A';
+  };
+
+  const getDocumentLabel = (fieldname) => {
+    const docLabels = {
+      tenthTwelfthDocs: '10th & 12th Certificates',
+      graduationDocs: 'Graduation Certificates',
+      postgraduationDocs: 'Postgraduation/PhD Certificates',
+      experienceCertificate: 'Experience Certificate',
+      salarySlips: 'Last 3 Months Salary Slips',
+      panCard: 'PAN Card',
+      aadharCard: 'Aadhar Card',
+      bankPassbook: 'Bank Passbook/Cancelled Cheque',
+      medicalCertificate: 'Medical Fitness Certificate',
+      backgroundVerification: 'Background Verification',
+    };
+    return docLabels[fieldname] || fieldname;
   };
 
   const renderStep = () => {
@@ -31,6 +63,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Existing basic info fields */}
               <div>
                 <strong>Employee No.:</strong> {employee.employeeId}
               </div>
@@ -177,36 +210,31 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { label: '10th & 12th Certificates', id: 'tenthTwelfthDocs' },
-              { label: 'Graduation Certificates', id: 'graduationDocs' },
-              { label: 'Postgraduation/PhD Certificates', id: 'postgraduationDocs' },
-              { label: 'Experience Certificate', id: 'experienceCertificate' },
-              { label: 'Last 3 Months Salary Slips', id: 'salarySlips' },
-              { label: 'PAN Card', id: 'panCard' },
-              { label: 'Aadhar Card', id: 'aadharCard' },
-              { label: 'Bank Passbook/Cancelled Cheque', id: 'bankPassbook' },
-              { label: 'Medical Fitness Certificate', id: 'medicalCertificate' },
-              { label: 'Background Verification', id: 'backgroundVerification' },
-              { label: 'Profile Picture', id: 'profilePicture' },
-            ].map((doc, index) => (
-              <div key={index}>
-                <strong>{doc.label}:</strong>{' '}
-                {employee.documents?.includes(doc.id) || (doc.id === 'profilePicture' && employee.profilePicture) ? (
-                  doc.id === 'profilePicture' ? (
-                    <button
-                      onClick={handleViewProfilePicture}
-                      className="text-blue-600 hover:underline"
-                    >
-                      View
-                    </button>
+              { fieldname: 'profilePicture', label: 'Profile Picture' },
+              { fieldname: 'tenthTwelfthDocs', label: '10th & 12th Certificates' },
+              { fieldname: 'graduationDocs', label: 'Graduation Certificates' },
+              { fieldname: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates' },
+              { fieldname: 'experienceCertificate', label: 'Experience Certificate' },
+              { fieldname: 'salarySlips', label: 'Last 3 Months Salary Slips' },
+              { fieldname: 'panCard', label: 'PAN Card' },
+              { fieldname: 'aadharCard', label: 'Aadhar Card' },
+              { fieldname: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque' },
+              { fieldname: 'medicalCertificate', label: 'Medical Fitness Certificate' },
+              { fieldname: 'backgroundVerification', label: 'Background Verification' },
+            ].map((doc, index) => {
+              const docMeta = documentMetadata.find(meta => meta.fieldname === doc.fieldname);
+              const fileId = doc.fieldname === 'profilePicture' ? employee.profilePicture : docMeta?.id;
+              return (
+                <div key={index}>
+                  <strong>{doc.label}:</strong>{' '}
+                  {fileId ? (
+                    <FileViewer fileId={fileId} />
                   ) : (
-                    <FileViewer fileId={employee[doc.id] || employee.documents.find(id => id === doc.id)} />
-                  )
-                ) : (
-                  'Not Uploaded'
-                )}
-              </div>
-            ))}
+                    'Not Uploaded'
+                  )}
+                </div>
+              );
+            })}
             {isAdmin && (
               <div className="col-span-2">
                 <Button

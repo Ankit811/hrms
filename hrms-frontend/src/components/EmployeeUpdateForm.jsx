@@ -93,6 +93,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [allowSubmit, setAllowSubmit] = useState(false);
+  const [documentMetadata, setDocumentMetadata] = useState([]); // New state for document metadata
 
   const submitButtonRef = useRef(null);
 
@@ -102,6 +103,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         const [deptRes, empRes] = await Promise.all([
           api.get('/departments'),
           api.get('/employees'),
+          api.get(`/employees/${employee._id}/documents`), // Fetch document metadata
         ]);
         setDepartments(deptRes.data.filter(dept => dept._id && dept._id.trim() !== ''));
         setManagers(
@@ -112,7 +114,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       }
     };
     fetchData();
-  }, []);
+  }, [employee._id]);
 
   useEffect(() => {
     if (step === 5) {
@@ -397,6 +399,22 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         View
       </button>
     );
+  };
+
+  const getDocumentLabel = (fieldname) => {
+    const docLabels = {
+      tenthTwelfthDocs: '10th & 12th Certificates',
+      graduationDocs: 'Graduation Certificates',
+      postgraduationDocs: 'Postgraduation/PhD Certificates',
+      experienceCertificate: 'Experience Certificate',
+      salarySlips: 'Last 3 Months Salary Slips',
+      panCard: 'PAN Card',
+      aadharCard: 'Aadhar Card',
+      bankPassbook: 'Bank Passbook/Cancelled Cheque',
+      medicalCertificate: 'Medical Fitness Certificate',
+      backgroundVerification: 'Background Verification',
+    };
+    return docLabels[fieldname] || fieldname;
   };
 
   const renderStep = () => {
@@ -793,34 +811,43 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
           {step === 4 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { label: 'Profile Picture', id: 'profilePicture', accept: 'image/jpeg,image/jpg' },
-                { label: '10th & 12th Certificates', id: 'tenthTwelfthDocs', accept: 'application/pdf' },
-                { label: 'Graduation Certificates', id: 'graduationDocs', accept: 'application/pdf' },
-                { label: 'Postgraduation/PhD Certificates', id: 'postgraduationDocs', accept: 'application/pdf' },
-                { label: 'Experience Certificate', id: 'experienceCertificate', accept: 'application/pdf' },
-                { label: 'Last 3 Months Salary Slips', id: 'salarySlips', accept: 'application/pdf', conditional: true },
-                { label: 'PAN Card', id: 'panCard', accept: 'application/pdf' },
-                { label: 'Aadhar Card', id: 'aadharCard', accept: 'application/pdf' },
-                { label: 'Bank Passbook/Cancelled Cheque', id: 'bankPassbook', accept: 'application/pdf' },
-                { label: 'Medical Fitness Certificate', id: 'medicalCertificate', accept: 'application/pdf' },
-                { label: 'Background Verification', id: 'backgroundVerification', accept: 'application/pdf' },
-              ].map((doc, index) => (
-                <div key={index} className={doc.conditional && !employee.documents?.includes('experienceCertificate') && !files.experienceCertificate ? 'hidden' : 'flex flex-col'}>
-                  <strong className="mb-1">{doc.label}:</strong>
-                  {(form[doc.id] || (doc.id === 'profilePicture' && employee.profilePicture)) && (
-                    <FileViewer fileId={form[doc.id] || employee.profilePicture} />
-                  )}
-                  <Input
-                    name={doc.id}
-                    type="file"
-                    accept={doc.accept}
-                    onChange={handleFileChange}
-                    className={errors[doc.id] ? 'border-red-500 mt-1' : 'mt-1'}
-                    required={doc.id !== 'postgraduationDocs' && doc.id !== 'experienceCertificate' && (!doc.conditional || (employee.documents?.includes('experienceCertificate') || files.experienceCertificate))}
-                  />
-                  {errors[doc.id] && <p className="mt-1 text-sm text-red-500">{errors[doc.id]}</p>}
-                </div>
-              ))}
+                { fieldname: 'profilePicture', label: 'Profile Picture', accept: 'image/jpeg,image/jpg' },
+                { fieldname: 'tenthTwelfthDocs', label: '10th & 12th Certificates', accept: 'application/pdf' },
+                { fieldname: 'graduationDocs', label: 'Graduation Certificates', accept: 'application/pdf' },
+                { fieldname: 'postgraduationDocs', label: 'Postgraduation/PhD Certificates', accept: 'application/pdf' },
+                { fieldname: 'experienceCertificate', label: 'Experience Certificate', accept: 'application/pdf' },
+                { fieldname: 'salarySlips', label: 'Last 3 Months Salary Slips', accept: 'application/pdf', conditional: true },
+                { fieldname: 'panCard', label: 'PAN Card', accept: 'application/pdf' },
+                { fieldname: 'aadharCard', label: 'Aadhar Card', accept: 'application/pdf' },
+                { fieldname: 'bankPassbook', label: 'Bank Passbook/Cancelled Cheque', accept: 'application/pdf' },
+                { fieldname: 'medicalCertificate', label: 'Medical Fitness Certificate', accept: 'application/pdf' },
+                { fieldname: 'backgroundVerification', label: 'Background Verification', accept: 'application/pdf' },
+              ].map((doc, index) => {
+                const docMeta = documentMetadata.find(meta => meta.fieldname === doc.fieldname);
+                const fileId = doc.fieldname === 'profilePicture' ? employee.profilePicture : docMeta?.id;
+                return (
+                  <div
+                    key={index}
+                    className={doc.conditional && !employee.documents?.includes('experienceCertificate') && !files.experienceCertificate ? 'hidden' : 'flex flex-col'}
+                  >
+                    <strong className="mb-1">{doc.label}:</strong>
+                    {fileId && (
+                      <div className="mb-2">
+                        <FileViewer fileId={fileId} />
+                      </div>
+                    )}
+                    <Input
+                      name={doc.fieldname}
+                      type="file"
+                      accept={doc.accept}
+                      onChange={handleFileChange}
+                      className={errors[doc.fieldname] ? 'border-red-500 mt-1' : 'mt-1'}
+                      required={doc.fieldname !== 'postgraduationDocs' && doc.fieldname !== 'experienceCertificate' && (!doc.conditional || (employee.documents?.includes('experienceCertificate') || files.experienceCertificate))}
+                    />
+                    {errors[doc.fieldname] && <p className="mt-1 text-sm text-red-500">{errors[doc.fieldname]}</p>}
+                  </div>
+                );
+              })}
             </div>
           )}
           {step === 5 && (

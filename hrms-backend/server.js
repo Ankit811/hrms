@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const { gfsReady } = require('./utils/gridfs');
 
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
@@ -19,13 +20,11 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Define allowed origins
 const allowedOrigins = [
-  'http://localhost:5174', // Updated to new frontend port
+  'http://localhost:5174',
   'http://localhost:3000',
 ];
 
-// Configure CORS for Express
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -41,7 +40,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configure CORS for Socket.IO
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
@@ -55,10 +53,8 @@ const io = new Server(server, {
   },
 });
 
-// Global socket instance
 global._io = io;
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
@@ -70,11 +66,25 @@ app.use('/api/notifications', notificationRoutes);
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');
-    syncAttendance();
-    setInterval(syncAttendance, 24 * 60 * 60 * 1000);
+    // Wait for GridFS to be ready with a timeout
+    const checkGridFS = setInterval(() => {
+      if (gfsReady()) {
+        clearInterval(checkGridFS);
+        console.log('GridFS initialized successfully');
+        syncAttendance();
+        setInterval(syncAttendance, 24 * 60 * 60 * 1000);
 
-    const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+        const PORT = process.env.PORT || 5000;
+        server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+      }
+    }, 100); // Check every 100ms
+    // Timeout after 10 seconds if GridFS isn't ready
+    setTimeout(() => {
+      if (!gfsReady()) {
+        console.error('GridFS failed to initialize within 10 seconds');
+        process.exit(1);
+      }
+    }, 10000);
   })
   .catch(err => {
     console.error('MongoDB connection error:', err);

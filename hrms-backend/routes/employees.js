@@ -1,3 +1,4 @@
+// routes/employees.js
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -8,28 +9,16 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const Audit = require('../models/Audit');
 const { upload, uploadToGridFS, gfsReady } = require('../middleware/fileupload');
+const { getGfs, gfsReady: gridFsReady } = require('../utils/gridfs');
+
 require('dotenv').config();
-
-// Initialize dedicated GridFS connection
-let gfs;
-const conn = mongoose.createConnection(process.env.MONGO_URI);
-
-conn.on('error', (err) => {
-  console.error('GridFS MongoDB connection error:', err);
-});
-
-conn.once('open', () => {
-  console.log('GridFS MongoDB connection established');
-  gfs = new mongoose.mongo.GridFSBucket(conn.db, { bucketName: 'Uploads' });
-});
 
 // Middleware to check gfs readiness
 const ensureGfs = (req, res, next) => {
   if (!gfsReady()) {
     console.error('GridFS not initialized');
-    return res.status(500).json({ message: 'GridFS not initialized. Please try again later.' });
+    return res.status(503).json({ message: 'GridFS not initialized. Please try again later.' });
   }
-  console.log('GridFS is initialized, proceeding with upload');
   next();
 };
 
@@ -39,7 +28,6 @@ const ensureDbConnection = (req, res, next) => {
     console.error('MongoDB connection is not open, state:', mongoose.connection.readyState);
     return res.status(500).json({ message: 'Database connection is not open' });
   }
-  console.log('MongoDB connection is open, state:', mongoose.connection.readyState);
   next();
 };
 
@@ -47,7 +35,6 @@ const ensureDbConnection = (req, res, next) => {
 const checkForFiles = (req, res, next) => {
   const contentType = req.headers['content-type'] || '';
   if (contentType.includes('multipart/form-data')) {
-    console.log('Detected multipart/form-data, processing with multer');
     upload.fields([
       { name: 'profilePicture', maxCount: 1 },
       { name: 'tenthTwelfthDocs', maxCount: 1 },
@@ -73,17 +60,14 @@ const checkForFiles = (req, res, next) => {
       req.uploadedFiles = {};
       try {
         if (!req.files || Object.keys(req.files).length === 0) {
-          console.log('No files provided in request');
           return next();
         }
         for (const field of Object.keys(req.files)) {
           req.uploadedFiles[field] = [];
           for (const file of req.files[field]) {
             if (!file.buffer || !file.originalname || !file.mimetype) {
-              console.error(`Invalid file data for ${field}:`, file);
               return res.status(400).json({ message: `Invalid file data for ${field}` });
             }
-            console.log(`Uploading file: ${file.originalname} (${file.fieldname})`);
             const uploadedFile = await uploadToGridFS(file, {
               originalname: file.originalname,
               mimetype: file.mimetype,
@@ -91,10 +75,8 @@ const checkForFiles = (req, res, next) => {
               employeeId: req.body.employeeId || req.params.id || 'unknown',
             });
             if (!uploadedFile || !uploadedFile._id) {
-              console.error(`GridFS upload failed for ${file.originalname}: No _id returned`);
               return res.status(500).json({ message: `GridFS upload failed for ${file.originalname}` });
             }
-            console.log(`File uploaded successfully: ${uploadedFile._id}`);
             req.uploadedFiles[field].push({
               id: uploadedFile._id,
               filename: uploadedFile.filename,
@@ -108,11 +90,39 @@ const checkForFiles = (req, res, next) => {
       }
     });
   } else {
-    console.log('No files detected, skipping multer');
     req.uploadedFiles = {};
     next();
   }
 };
+
+// Get document metadata for an employee
+router.get('/:id/documents', auth, ensureGfs, async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    const gfs = getGfs();
+    if (!gfs) {
+      return res.status(503).json({ message: 'GridFS not initialized' });
+    }
+    const documentMetadata = [];
+    for (const docId of employee.documents) {
+      const file = await gfs.find({ _id: new mongoose.Types.ObjectId(docId) }).toArray();
+      if (file[0]) {
+        documentMetadata.push({
+          id: file[0]._id,
+          filename: file[0].filename,
+          fieldname: file[0].metadata?.fieldname || 'unknown',
+        });
+      }
+    }
+    res.json(documentMetadata);
+  } catch (err) {
+    console.error('Error fetching document metadata:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
 
 // Get all employees (Admin and CEO only)
 router.get('/', auth, role(['Admin', 'CEO']), async (req, res) => {
@@ -437,7 +447,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
       if (employee.profilePicture) {
         console.log('Deleting old profile picture:', employee.profilePicture);
         try {
-          await gfs.delete(new mongoose.Types.ObjectId(employee.profilePicture));
+          await getGfs().delete(new mongoose.Types.ObjectId(employee.profilePicture));
         } catch (err) {
           console.warn(`Failed to delete old profile picture: ${err.message}`);
         }
@@ -469,7 +479,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
         for (const docId of employee.documents) {
           console.log('Deleting old document:', docId);
           try {
-            await gfs.delete(new mongoose.Types.ObjectId(docId));
+            await getGfs().delete(new mongoose.Types.ObjectId(docId));
           } catch (err) {
             console.warn(`Failed to delete old document ${docId}: ${err.message}`);
           }
@@ -489,9 +499,9 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
       } : {};
     }
 
-    const updatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
+    const updatedEmployee = await employee.save();
+    const populatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
     console.log('Employee updated:', updatedEmployee.employeeId);
-    res.json(updatedEmployee)
 
     try {
       await Audit.create({
@@ -503,7 +513,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
       console.warn('Audit logging failed:', auditErr.message);
     }
 
-    res.json(updatedEmployee);
+    res.json(populatedEmployee);
   } catch (err) {
     console.error('Error updating employee:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -511,7 +521,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
 });
 
 // Delete employee (Admin only)
-router.delete('/:id', auth, role(['Admin']), async (req, res) => {
+router.delete('/:id', auth, role(['Admin']), ensureGfs, async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
@@ -519,7 +529,7 @@ router.delete('/:id', auth, role(['Admin']), async (req, res) => {
     if (employee.profilePicture) {
       console.log('Deleting profile picture:', employee.profilePicture);
       try {
-        await gfs.delete(new mongoose.Types.ObjectId(employee.profilePicture));
+        await getGfs().delete(new mongoose.Types.ObjectId(employee.profilePicture));
       } catch (err) {
         console.warn(`Failed to delete profile picture: ${err.message}`);
       }
@@ -529,7 +539,7 @@ router.delete('/:id', auth, role(['Admin']), async (req, res) => {
         employee.documents.map(docId => {
           console.log('Deleting document:', docId);
           try {
-            return gfs.delete(new mongoose.Types.ObjectId(docId));
+            return getGfs().delete(new mongoose.Types.ObjectId(docId));
           } catch (err) {
             console.warn(`Failed to delete document ${docId}: ${err.message}`);
             return null;
@@ -559,22 +569,32 @@ router.delete('/:id', auth, role(['Admin']), async (req, res) => {
 });
 
 // Get file by ID (e.g., profile picture or document)
-router.get('/files/:fileId', auth, async (req, res) => {
+router.get('/files/:fileId', auth, ensureGfs, async (req, res) => {
   try {
-    const file = await conn.db.collection('Uploads.files').findOne({ _id: new mongoose.Types.ObjectId(req.params.fileId) });
-    if (!file) return res.status(404).json({ message: 'File not found' });
+    const gfs = getGfs();
+    let fileId;
+    try {
+      fileId = new mongoose.Types.ObjectId(req.params.fileId);
+    } catch (err) {
+      return res.status(400).json({ message: 'Invalid file ID' });
+    }
 
-    console.log('Streaming file:', file._id);
-    const downloadStream = gfs.openDownloadStream(new mongoose.Types.ObjectId(req.params.fileId));
+    const files = await gfs.find({ _id: fileId }).toArray();
+    if (!files || files.length === 0) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    console.log('Streaming file:', fileId);
+    res.set('Content-Type', files[0].contentType);
+    const downloadStream = gfs.openDownloadStream(fileId);
     downloadStream.on('error', (err) => {
       console.error('Download stream error:', err);
       res.status(500).json({ message: 'Error streaming file' });
     });
-    res.set('Content-Type', file.contentType);
     downloadStream.pipe(res);
   } catch (err) {
-    console.error('Error streaming file:', err);
-    res.status(500).json({ message: err.message });
+    console.error('Error fetching file:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -585,9 +605,9 @@ router.patch('/:id/lock', auth, role(['Admin']), async (req, res) => {
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
     employee.locked = !employee.locked;
-    const updatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
+    const updatedEmployee = await employee.save();
+    const populatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
     console.log(`Employee ${employee.employeeId} lock toggled to: ${employee.locked}`);
-    res.json(updatedEmployee)
 
     try {
       await Audit.create({
@@ -599,7 +619,7 @@ router.patch('/:id/lock', auth, role(['Admin']), async (req, res) => {
       console.warn('Audit logging failed:', auditErr.message);
     }
 
-    res.json(updatedEmployee);
+    res.json(populatedEmployee);
   } catch (err) {
     console.error('Error locking/unlocking employee:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -620,9 +640,9 @@ router.patch('/:id/lock-section', auth, role(['Admin']), async (req, res) => {
 
     const lockField = `${section}Locked`;
     employee[lockField] = !employee[lockField];
-    const updatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
+    const updatedEmployee = await employee.save();
+    const populatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
     console.log(`Section ${section} lock toggled for employee ${employee.employeeId} to: ${employee[lockField]}`);
-    res.json(updatedEmployee)
 
     try {
       await Audit.create({
@@ -634,7 +654,7 @@ router.patch('/:id/lock-section', auth, role(['Admin']), async (req, res) => {
       console.warn('Audit logging failed:', auditErr.message);
     }
 
-    res.json(updatedEmployee);
+    res.json(populatedEmployee);
   } catch (err) {
     console.error('Error toggling section lock:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
