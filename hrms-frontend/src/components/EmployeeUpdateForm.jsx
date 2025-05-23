@@ -392,7 +392,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     return (
       <button
         onClick={handleViewFile}
-        className="text-blue-600 hover:underline mt-1"
+        className="text-blue-600 bg-white dark:bg-black"
       >
         View
       </button>
@@ -912,7 +912,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         closeOnOverlayClick={false}
         closeOnEsc={false}
       >
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl bg-white dark:bg-black border">
           <DialogTitle>Update Employee Information</DialogTitle>
           <DialogDescription>
             Update the details of the employee below. Navigate through the steps to edit all sections.
@@ -923,7 +923,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Card className="bg-white shadow-lg border-none">
+              <Card className="shadow-lg bg-white dark:bg-black border">
                 <CardContent className="p-6">
                   <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
                     {renderStep()}

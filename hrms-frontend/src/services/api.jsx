@@ -20,6 +20,7 @@ export const fetchFileAsBlob = async (fileId) => {
     const response = await api.get(`/employees/files/${fileId}`, {
       responseType: 'blob',
     });
+    console.log("file res : ",response)
     return response.data;
   } catch (error) {
     console.error(`Error fetching file ${fileId}:`, error.response?.data || error.message);
