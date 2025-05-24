@@ -1,24 +1,28 @@
-// utils/syncAttendance.js
-
 const { connectSQL, sql } = require('../config/sql');
 const RawPunchlog = require('../models/RawPunchlog');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
 const SyncMetadata = require('../models/SyncMetadata');
+const Leave = require('../models/Leave');
 
 const syncAttendance = async () => {
   try {
-    // Step 1: Fetch or initialize lastSyncedAt
+    // Step 1: Check if RawPunchlog is empty and initialize lastSyncedAt
+    const rawPunchlogCount = await RawPunchlog.countDocuments();
     let syncMeta = await SyncMetadata.findOne({ name: 'attendanceSync' });
+    let fromDate;
 
-    if (!syncMeta) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      yesterday.setHours(0, 0, 0, 0);
-      syncMeta = await SyncMetadata.create({ name: 'attendanceSync', lastSyncedAt: yesterday });
+    if (rawPunchlogCount === 0 || !syncMeta) {
+      // If RawPunchlog is empty or no sync metadata, fetch all punch logs
+      console.log('RawPunchlog is empty or no sync metadata, fetching all punch logs');
+      fromDate = new Date('1970-01-01'); // Arbitrary early date to fetch all records
+      if (!syncMeta) {
+        syncMeta = await SyncMetadata.create({ name: 'attendanceSync', lastSyncedAt: fromDate });
+      }
+    } else {
+      fromDate = new Date(syncMeta.lastSyncedAt);
     }
 
-    const fromDate = new Date(syncMeta.lastSyncedAt);
     const toDate = new Date();
 
     const formatDateTime = (date) =>
@@ -38,6 +42,10 @@ const syncAttendance = async () => {
 
     if (!records || records.length === 0) {
       console.log('⚠️ No new punch logs found.');
+      await SyncMetadata.findOneAndUpdate(
+        { name: 'attendanceSync' },
+        { lastSyncedAt: toDate }
+      );
       return;
     }
 
@@ -53,6 +61,7 @@ const syncAttendance = async () => {
       } else if (logTime instanceof Date) {
         logTime = logTime.toISOString().split('T')[1].substring(0, 8);
       } else if (typeof logTime === 'string' && !/^\d{2}:\d{2}:\d{2}$/.test(logTime)) {
+        console.warn(`⚠️ Invalid LogTime format for UserID: ${log.UserID}`, log.LogTime);
         return null;
       }
 
@@ -76,7 +85,7 @@ const syncAttendance = async () => {
       const exists = await RawPunchlog.exists({
         UserID: log.UserID,
         LogDate: log.LogDate,
-        LogTime: log.LogTime
+        LogTime: log.LogTime,
       });
       if (!exists) newLogs.push(log);
     }
@@ -112,27 +121,102 @@ const syncAttendance = async () => {
         continue;
       }
 
-      // First log as IN
-      await Attendance.create({
+      const logDate = new Date(logs[0].LogDate);
+      logDate.setHours(0, 0, 0, 0);
+
+      // Check if it's the current day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isCurrentDay = logDate.getTime() === today.getTime();
+
+      // Get first punch
+      const firstPunch = logs[0];
+
+      // Check for half-day leave to adjust timeIn
+      let timeIn = firstPunch.LogTime;
+      let status = 'Present';
+      let halfDay = null;
+
+      const leave = await Leave.findOne({
         employeeId: employee.employeeId,
-        userId: employee.userId,
-        name: employee.name,
-        logDate: logs[0].LogDate,
-        logTime: logs[0].LogTime,
-        direction: 'IN',
-        status: 'Present',
+        'halfDay.date': logDate,
+        'status.ceo': 'Approved',
       });
 
-      // Last log as OUT
-      await Attendance.create({
+      if (leave && leave.halfDay.session === 'forenoon') {
+        // Forenoon leave: expect punch in afternoon
+        const afternoonPunch = logs.find(log => log.LogTime >= '13:30:00');
+        if (afternoonPunch) {
+          timeIn = afternoonPunch.LogTime;
+          status = 'Half Day';
+          halfDay = 'Second Half';
+        } else {
+          continue; // Skip if no afternoon punch
+        }
+      } else if (leave && leave.halfDay.session === 'afternoon') {
+        // Afternoon leave: expect punch in morning
+        const morningPunch = logs.find(log => log.LogTime <= '13:30:00');
+        if (morningPunch) {
+          status = 'Half Day';
+          halfDay = 'First Half';
+        } else {
+          continue; // Skip if no morning punch
+        }
+      }
+
+      // Create or update Attendance record
+      const existingAttendance = await Attendance.findOne({
         employeeId: employee.employeeId,
-        userId: employee.userId,
-        name: employee.name,
-        logDate: logs[logs.length - 1].LogDate,
-        logTime: logs[logs.length - 1].LogTime,
-        direction: 'OUT',
-        status: 'Present',
+        logDate,
       });
+
+      if (existingAttendance) {
+        existingAttendance.timeIn = timeIn;
+        existingAttendance.status = status;
+        existingAttendance.halfDay = halfDay;
+        existingAttendance.ot = 0; // Reset OT for current day
+        if (!isCurrentDay) {
+          // For non-current days, set timeOut
+          const lastPunch = logs[logs.length - 1];
+          existingAttendance.timeOut = lastPunch.LogTime;
+          if (firstPunch !== lastPunch && status === 'Present') {
+            const [inHours, inMinutes] = timeIn.split(':').map(Number);
+            const [outHours, outMinutes] = lastPunch.LogTime.split(':').map(Number);
+            const duration = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
+            existingAttendance.ot = Math.max(0, duration - 510);
+            if (duration < 240) {
+              existingAttendance.status = 'Half Day';
+              existingAttendance.halfDay = 'First Half';
+            }
+          }
+        }
+        await existingAttendance.save();
+      } else {
+        const attendanceData = {
+          employeeId: employee.employeeId,
+          userId,
+          name: employee.name,
+          logDate,
+          timeIn,
+          timeOut: isCurrentDay ? null : logs[logs.length - 1].LogTime,
+          status,
+          halfDay,
+          ot: 0,
+        };
+
+        if (!isCurrentDay && logs.length > 1 && status === 'Present') {
+          const [inHours, inMinutes] = timeIn.split(':').map(Number);
+          const [outHours, outMinutes] = logs[logs.length - 1].LogTime.split(':').map(Number);
+          const duration = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
+          attendanceData.ot = Math.max(0, duration - 510);
+          if (duration < 240) {
+            attendanceData.status = 'Half Day';
+            attendanceData.halfDay = 'First Half';
+          }
+        }
+
+        await Attendance.create(attendanceData);
+      }
 
       // Mark logs as processed
       for (const log of logs) {
@@ -143,18 +227,16 @@ const syncAttendance = async () => {
 
     await RawPunchlog.deleteMany({ processed: true });
 
-    // ✅ Update sync time
+    // Step 7: Update sync time
     await SyncMetadata.findOneAndUpdate(
       { name: 'attendanceSync' },
-      { lastSyncedAt: new Date() }
+      { lastSyncedAt: toDate }
     );
 
     console.log('✅ Attendance sync complete and metadata updated.');
-
   } catch (err) {
     console.error('❌ Attendance sync error:', err.message, err.stack);
   }
 };
 
 module.exports = { syncAttendance };
-

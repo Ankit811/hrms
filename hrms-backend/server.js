@@ -1,19 +1,13 @@
-// ===== server.js =====
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const cron = require('node-cron');
 const { gfsReady } = require('./utils/gridfs');
-
-const authRoutes = require('./routes/auth');
-const employeeRoutes = require('./routes/employees');
-const departmentRoutes = require('./routes/departments');
-const attendanceRoutes = require('./routes/attendance');
-const leaveRoutes = require('./routes/leaves');
-const notificationRoutes = require('./routes/notifications');
 const { syncAttendance } = require('./utils/syncAttendance');
+const { processLateArrivalsAndAbsents } = require('./utils/processAttendance');
 
 dotenv.config();
 
@@ -55,6 +49,13 @@ const io = new Server(server, {
 
 global._io = io;
 
+const authRoutes = require('./routes/auth');
+const employeeRoutes = require('./routes/employees');
+const departmentRoutes = require('./routes/departments');
+const attendanceRoutes = require('./routes/attendance');
+const leaveRoutes = require('./routes/leaves');
+const notificationRoutes = require('./routes/notifications');
+
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
@@ -71,8 +72,26 @@ mongoose.connect(process.env.MONGO_URI)
       if (gfsReady()) {
         clearInterval(checkGridFS);
         console.log('GridFS initialized successfully');
-        syncAttendance();
-        setInterval(syncAttendance, 24 * 60 * 60 * 1000);
+
+        // Schedule syncAttendance at 9:30 AM and 2:00 PM daily
+        cron.schedule('30 9 * * *', async () => {
+          console.log('Running syncAttendance at 9:30 AM...');
+          await syncAttendance();
+          console.log('syncAttendance at 9:30 AM completed.');
+        });
+
+        cron.schedule('00 14 * * *', async () => {
+          console.log('Running syncAttendance at 2:00 PM...');
+          await syncAttendance();
+          console.log('syncAttendance at 2:00 PM completed.');
+        });
+
+        // Schedule processLateArrivalsAndAbsents at 9:30 AM daily
+        cron.schedule('31 9 * * *', async () => {
+          console.log('Running processLateArrivalsAndAbsents at 9:31 AM...');
+          await processLateArrivalsAndAbsents();
+          console.log('processLateArrivalsAndAbsents at 9:31 AM completed.');
+        });
 
         const PORT = process.env.PORT || 5000;
         server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

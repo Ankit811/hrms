@@ -5,9 +5,11 @@ const attendanceSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   name: { type: String, required: true },
   logDate: { type: Date, required: true },
-  logTime: { type: String, required: true },
-  direction: { type: String, enum: ['IN', 'OUT'], required: true },
-  status: { type: String, enum: ['Present', 'Absent'], required: true },
+  timeIn: { type: String }, // First IN time, optional
+  timeOut: { type: String }, // Last OUT time
+  status: { type: String, enum: ['Present', 'Absent', 'Half Day'], required: true },
+  halfDay: { type: String, enum: ['First Half', 'Second Half', null], default: null }, // Track half-day absences
+  ot: { type: Number, default: 0 }, // Overtime in minutes
 }, { timestamps: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
