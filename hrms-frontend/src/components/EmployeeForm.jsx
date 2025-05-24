@@ -8,6 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card, CardContent } from '../components/ui/card';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
+import * as XLSX from 'xlsx'; // <-- Add this line
+
+const EXCEL_HEADERS = [
+  'employeeId', 'userId', 'name', 'dateOfBirth', 'fatherName', 'motherName',
+  'mobileNumber', 'permanentAddress', 'currentAddress', 'email', 'password',
+  'aadharNumber', 'gender', 'maritalStatus', 'spouseName', 'emergencyContactName',
+  'emergencyContactNumber', 'dateOfJoining', 'reportingManager', 'status',
+  'probationPeriod', 'confirmationDate', 'referredBy', 'loginType', 'designation',
+  'location', 'department', 'employeeType', 'panNumber', 'pfNumber', 'uanNumber',
+  'esiNumber', 'paymentType', 'bankName', 'bankBranch', 'accountNumber', 'ifscCode'
+];
 
 function EmployeeForm() {
   const navigate = useNavigate();
@@ -69,6 +80,11 @@ function EmployeeForm() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+  // Excel upload state
+  const [excelFile, setExcelFile] = useState(null);
+  const [excelUploadResult, setExcelUploadResult] = useState(null);
+  const [excelUploading, setExcelUploading] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -84,6 +100,34 @@ function EmployeeForm() {
     };
     fetchData();
   }, []);
+
+  // Excel template download
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([EXCEL_HEADERS]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Employees");
+    XLSX.writeFile(wb, "employee_upload_template.xlsx");
+  };
+
+  // Excel upload
+  const handleExcelUpload = async () => {
+    if (!excelFile) return;
+    setExcelUploading(true);
+    setExcelUploadResult(null);
+    const formData = new FormData();
+    formData.append('excel', excelFile);
+
+    try {
+      const response = await api.post('/employees/upload-excel', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setExcelUploadResult(response.data);
+    } catch (err) {
+      setExcelUploadResult({ errors: [{ error: err.response?.data?.message || 'Upload failed' }] });
+    } finally {
+      setExcelUploading(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -629,6 +673,51 @@ function EmployeeForm() {
                 ))}
               </div>
             </div>
+            {/* Excel Upload Section */}
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '1rem' }}>
+            <Button type="button" variant="outline" onClick={handleDownloadTemplate}>
+              Download Excel Template
+            </Button>
+            <Input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={e => setExcelFile(e.target.files[0])}
+              style={{ width: 220 }}
+            />
+            <Button
+              type="button"
+              onClick={handleExcelUpload}
+              disabled={!excelFile || excelUploading}
+            >
+              {excelUploading ? 'Uploading...' : 'Upload Excel'}
+            </Button>
+          </div>
+          {excelUploadResult && (
+            <div>
+              {excelUploadResult.success && excelUploadResult.success.length > 0 && (
+                <div className="alert alert-success">
+                  {excelUploadResult.success.length} employees created successfully.
+                </div>
+              )}
+              {excelUploadResult.errors && excelUploadResult.errors.length > 0 && (
+                <div className="alert alert-danger">
+                  <b>Errors:</b>
+                  <ul>
+                    {excelUploadResult.errors.map((err, idx) => (
+                      <li key={idx}>
+                        {err.error}
+                        {err.row && (
+                          <pre style={{ fontSize: '0.8em', background: '#f8f9fa', padding: '0.5em' }}>
+                            {JSON.stringify(err.row, null, 2)}
+                          </pre>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
             <form onSubmit={step === 5 ? handleSubmit : handleNext}>
               {renderStep()}
               {errors.submit && (

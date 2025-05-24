@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const XLSX = require('xlsx');
 const multer = require('multer');
 const Employee = require('../models/Employee');
 const Department = require('../models/Department');
@@ -12,6 +13,16 @@ const { upload, uploadToGridFS, gfsReady } = require('../middleware/fileupload')
 const { getGfs, gfsReady: gridFsReady } = require('../utils/gridfs');
 
 require('dotenv').config();
+
+function parseExcelDate(value) {
+  if (!value) return undefined;
+  if (typeof value === 'number') {
+    // Excel's epoch starts at 1900-01-01
+    return new Date(Math.round((value - 25569) * 86400 * 1000));
+  }
+  return new Date(value);
+}
+
 
 // Middleware to check gfs readiness
 const ensureGfs = (req, res, next) => {
@@ -94,6 +105,11 @@ const checkForFiles = (req, res, next) => {
     next();
   }
 };
+
+const excelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+});
 
 // Get document metadata for an employee
 router.get('/:id/documents', auth, ensureGfs, async (req, res) => {
@@ -660,5 +676,134 @@ router.patch('/:id/lock-section', auth, role(['Admin']), async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
+
+router.post(
+  '/upload-excel',
+  auth,
+  role(['Admin']),
+  excelUpload.single('excel'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded.' });
+      }
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet);
+
+      const results = await Promise.all(
+        rows.map(async (row) => {
+          try {
+            // Format validations (only if field exists)
+            if (row.aadharNumber && !/^\d{12}$/.test(row.aadharNumber)) {
+              throw new Error('Aadhar Number must be exactly 12 digits');
+            }
+            if (row.mobileNumber && !/^\d{10}$/.test(row.mobileNumber)) {
+              throw new Error('Mobile Number must be exactly 10 digits');
+            }
+            if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+              throw new Error('Invalid email format');
+            }
+            if (row.panNumber && !/^[A-Z0-9]{10}$/.test(row.panNumber)) {
+              throw new Error('PAN Number must be 10 alphanumeric characters');
+            }
+            if (row.pfNumber && !/^\d{18}$/.test(row.pfNumber)) {
+              throw new Error('PF Number must be 18 digits');
+            }
+            if (row.uanNumber && !/^\d{12}$/.test(row.uanNumber)) {
+              throw new Error('UAN Number must be 12 digits');
+            }
+            if (row.esiNumber && !/^\d{12}$/.test(row.esiNumber)) {
+              throw new Error('ESI Number must be 12 digits');
+            }
+
+            // Department population if department is provided
+            let departmentId = null;
+            if (row.department) {
+              const dept = await Department.findOne({ name: row.department });
+              if (dept) departmentId = dept._id;
+            }
+
+            // Reporting Manager population if reportingManager is provided
+            let reportingManagerId = null;
+            if (row.reportingManager) {
+              const manager = await Employee.findOne({ employeeId: row.reportingManager });
+              if (manager) reportingManagerId = manager._id;
+            }
+
+            // Compose employee data (leave missing fields blank)
+            const employeeData = {
+              employeeId: row.employeeId || '',
+              userId: row.userId || '',
+              name: row.name || '',
+              dateOfBirth: parseExcelDate(row.dateOfBirth),
+              fatherName: row.fatherName || '',
+              motherName: row.motherName || '',
+              mobileNumber: row.mobileNumber || '',
+              permanentAddress: row.permanentAddress || '',
+              currentAddress: row.currentAddress || '',
+              email: row.email || '',
+              password: row.password || Math.random().toString(36).slice(-8),
+              aadharNumber: row.aadharNumber || '',
+              gender: row.gender || '',
+              maritalStatus: row.maritalStatus || '',
+              spouseName: row.spouseName || '',
+              emergencyContactName: row.emergencyContactName || '',
+              emergencyContactNumber: row.emergencyContactNumber || '',
+              dateOfJoining: parseExcelDate(row.dateOfJoining),
+              reportingManager: reportingManagerId,
+              status: row.status || '',
+              probationPeriod: row.probationPeriod || '',
+              confirmationDate: row.confirmationDate ? new Date(row.confirmationDate) : undefined,
+              referredBy: row.referredBy || '',
+              loginType: row.loginType || '',
+              designation: row.designation || '',
+              location: row.location || '',
+              department: departmentId,
+              employeeType: row.employeeType || '',
+              panNumber: row.panNumber || '',
+              pfNumber: row.pfNumber || '',
+              uanNumber: row.uanNumber || '',
+              esiNumber: row.esiNumber || '',
+              paymentType: row.paymentType || '',
+              bankDetails: {
+                bankName: row.bankName || '',
+                bankBranch: row.bankBranch || '',
+                accountNumber: row.accountNumber || '',
+                ifscCode: row.ifscCode || '',
+              },
+              // Lock all sections except document upload (which stays locked)
+              locked: true,
+              basicInfoLocked: true,
+              positionLocked: true,
+              statutoryLocked: true,
+              documentsLocked: true,
+              paymentLocked: true,
+            };
+
+            // Remove empty bankDetails if paymentType is not 'Bank Transfer'
+            if (employeeData.paymentType !== 'Bank Transfer') {
+              delete employeeData.bankDetails;
+            }
+
+            // Save Employee
+            const employee = new Employee(employeeData);
+            await employee.save();
+            return { employeeId: employee.employeeId, _id: employee._id };
+          } catch (err) {
+            return { error: err.message, row };
+          }
+        })
+      );
+
+      res.json({
+        success: results.filter(r => !r.error),
+        errors: results.filter(r => r.error)
+      });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
 
 module.exports = router;

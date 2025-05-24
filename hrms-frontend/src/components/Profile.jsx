@@ -9,7 +9,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import ContentLayout from './ContentLayout';
-import { useFileHandler } from '../hooks/useFileHandler'; // Import the new hook
+import { useFileHandler } from '../hooks/useFileHandler';
 
 function Profile() {
   const { user } = useContext(AuthContext);
@@ -55,6 +55,12 @@ function Profile() {
       accountNumber: '',
       ifscCode: '',
     },
+    locked: false,
+    basicInfoLocked: false,
+    positionLocked: false,
+    statutoryLocked: false,
+    documentsLocked: false,
+    paymentLocked: false,
   });
   const [files, setFiles] = useState({
     profilePicture: null,
@@ -74,8 +80,8 @@ function Profile() {
   const [error, setError] = useState(null);
   const [fileErrors, setFileErrors] = useState({});
   const [step, setStep] = useState(1);
+  const [refresh, setRefresh] = useState(false);
 
-  // Use the hook to fetch and display the profile picture
   const { fileSrc: profilePictureSrc, error: profilePictureError, handleViewFile: handleViewProfilePicture } = useFileHandler(profile.profilePicture);
 
   const lockedFields = [
@@ -97,7 +103,6 @@ function Profile() {
     const fetchProfile = async () => {
       setLoading(true);
       setError(null);
-
       try {
         const res = await api.get(`/employees/${user.id}`);
         setProfile({
@@ -135,12 +140,13 @@ function Profile() {
           documents: res.data.documents || [],
           profilePicture: res.data.profilePicture || '',
           paymentType: res.data.paymentType || '',
-          bankDetails: res.data.bankDetails || {
-            bankName: '',
-            bankBranch: '',
-            accountNumber: '',
-            ifscCode: '',
-          },
+          bankDetails: res.data.bankDetails || { bankName: '', bankBranch: '', accountNumber: '', ifscCode: '' },
+          locked: res.data.locked || false,
+          basicInfoLocked: res.data.basicInfoLocked || false,
+          positionLocked: res.data.positionLocked || false,
+          statutoryLocked: res.data.statutoryLocked || false,
+          documentsLocked: res.data.documentsLocked || false,
+          paymentLocked: res.data.paymentLocked || false,
         });
         setIsLocked(res.data.locked || false);
       } catch (err) {
@@ -161,7 +167,7 @@ function Profile() {
     } else {
       navigate('/login');
     }
-  }, [user, navigate]);
+  }, [user, navigate, refresh]);
 
   const handleChange = (e) => {
     const { name, value, files: fileList } = e.target;
@@ -182,7 +188,6 @@ function Profile() {
         if (file.type !== 'application/pdf') {
           newErrors[name] = `${name.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
         } else {
-          // Additional size validation for PDFs
           const maxSize = name === 'salarySlips' || name === 'panCard' || name === 'aadharCard' || name === 'bankPassbook' ? 1 * 1024 * 1024 :
                           name === 'medicalCertificate' || name === 'backgroundVerification' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
           if (file.size > maxSize) {
@@ -274,6 +279,12 @@ function Profile() {
         bankDetails: res.data.bankDetails || profile.bankDetails,
         documents: res.data.documents || profile.documents,
         profilePicture: res.data.profilePicture || profile.profilePicture,
+        locked: res.data.locked || profile.locked,
+        basicInfoLocked: res.data.basicInfoLocked || profile.basicInfoLocked,
+        positionLocked: res.data.positionLocked || profile.positionLocked,
+        statutoryLocked: res.data.statutoryLocked || profile.statutoryLocked,
+        documentsLocked: res.data.documentsLocked || profile.documentsLocked,
+        paymentLocked: res.data.paymentLocked || profile.paymentLocked,
       });
       setFiles({
         profilePicture: null,
@@ -288,6 +299,7 @@ function Profile() {
         medicalCertificate: null,
         backgroundVerification: null,
       });
+      setRefresh(r => !r); // Trigger refresh after successful update
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Failed to update profile. Please try again.';
       alert(errorMessage);
@@ -297,7 +309,6 @@ function Profile() {
     }
   };
 
-  // Component to handle viewing files
   const FileViewer = ({ fileId }) => {
     const { handleViewFile } = useFileHandler(fileId);
     return (
@@ -335,7 +346,7 @@ function Profile() {
                   type="text"
                   value={profile.employeeId}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('employeeId')}
+                  disabled={lockedFields.includes('employeeId') || profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -347,7 +358,7 @@ function Profile() {
                   type="text"
                   value={profile.userId}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('userId')}
+                  disabled={lockedFields.includes('userId') || profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -359,7 +370,7 @@ function Profile() {
                   type="text"
                   value={profile.name}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   required
                   className="mt-1"
                 />
@@ -372,7 +383,7 @@ function Profile() {
                   type="date"
                   value={profile.dateOfBirth}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -384,7 +395,7 @@ function Profile() {
                   type="text"
                   value={profile.fatherName}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -396,7 +407,7 @@ function Profile() {
                   type="text"
                   value={profile.motherName}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -408,7 +419,7 @@ function Profile() {
                   type="tel"
                   value={profile.mobileNumber}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   required
                   className="mt-1"
                 />
@@ -421,7 +432,7 @@ function Profile() {
                   type="text"
                   value={profile.permanentAddress}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -433,7 +444,7 @@ function Profile() {
                   type="text"
                   value={profile.currentAddress}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -445,7 +456,7 @@ function Profile() {
                   type="email"
                   value={profile.email}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -457,7 +468,7 @@ function Profile() {
                   type="text"
                   value={profile.aadharNumber}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -468,7 +479,7 @@ function Profile() {
                   name="gender"
                   value={profile.gender}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100 bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
@@ -484,7 +495,7 @@ function Profile() {
                   name="maritalStatus"
                   value={profile.maritalStatus}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100 bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
@@ -501,7 +512,7 @@ function Profile() {
                     type="text"
                     value={profile.spouseName}
                     onChange={handleChange}
-                    disabled={isLocked}
+                    disabled={profile.basicInfoLocked}
                     className="mt-1"
                   />
                 </div>
@@ -514,7 +525,7 @@ function Profile() {
                   type="text"
                   value={profile.emergencyContactName}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -526,7 +537,7 @@ function Profile() {
                   type="tel"
                   value={profile.emergencyContactNumber}
                   onChange={handleChange}
-                  disabled={isLocked}
+                  disabled={profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -538,7 +549,7 @@ function Profile() {
                   type="date"
                   value={profile.dateOfJoining}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('dateOfJoining')}
+                  disabled={lockedFields.includes('dateOfJoining') || profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -550,7 +561,7 @@ function Profile() {
                   type="text"
                   value={profile.reportingManager.name}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('reportingManager.name')}
+                  disabled={lockedFields.includes('reportingManager.name') || profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -561,7 +572,7 @@ function Profile() {
                   name="status"
                   value={profile.status}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('status')}
+                  disabled={lockedFields.includes('status') || profile.basicInfoLocked}
                   className="mt-1 block w-full rounded-md border shadow-sm bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
@@ -580,7 +591,7 @@ function Profile() {
                       type="text"
                       value={profile.probationPeriod}
                       onChange={handleChange}
-                      disabled={lockedFields.includes('probationPeriod')}
+                      disabled={lockedFields.includes('probationPeriod') || profile.basicInfoLocked}
                       className="mt-1"
                     />
                   </div>
@@ -592,7 +603,7 @@ function Profile() {
                       type="date"
                       value={profile.confirmationDate}
                       onChange={handleChange}
-                      disabled={lockedFields.includes('confirmationDate')}
+                      disabled={lockedFields.includes('confirmationDate') || profile.basicInfoLocked}
                       className="mt-1"
                     />
                   </div>
@@ -606,7 +617,7 @@ function Profile() {
                   type="text"
                   value={profile.referredBy}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('referredBy')}
+                  disabled={lockedFields.includes('referredBy') || profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -618,7 +629,7 @@ function Profile() {
                   type="text"
                   value={profile.loginType}
                   onChange={handleChange}
-                  disabled={lockedFields.includes('loginType')}
+                  disabled={lockedFields.includes('loginType') || profile.basicInfoLocked}
                   className="mt-1"
                 />
               </div>
@@ -636,7 +647,7 @@ function Profile() {
                 type="text"
                 value={profile.designation}
                 onChange={handleChange}
-                disabled={lockedFields.includes('designation')}
+                disabled={lockedFields.includes('designation') || profile.positionLocked}
                 className="mt-1"
               />
             </div>
@@ -648,7 +659,7 @@ function Profile() {
                 type="text"
                 value={profile.location}
                 onChange={handleChange}
-                disabled={isLocked}
+                disabled={profile.positionLocked}
                 className="mt-1"
               />
             </div>
@@ -660,7 +671,7 @@ function Profile() {
                 type="text"
                 value={profile.department.name}
                 onChange={handleChange}
-                disabled={lockedFields.includes('department.name')}
+                disabled={lockedFields.includes('department.name') || profile.positionLocked}
                 className="mt-1"
               />
             </div>
@@ -672,7 +683,7 @@ function Profile() {
                 type="text"
                 value={profile.employeeType}
                 onChange={handleChange}
-                disabled={isLocked}
+                disabled={profile.positionLocked}
                 className="mt-1"
               />
             </div>
@@ -689,7 +700,7 @@ function Profile() {
                 type="text"
                 value={profile.panNumber}
                 onChange={handleChange}
-                disabled={isLocked}
+                disabled={profile.statutoryLocked}
                 className="mt-1"
               />
             </div>
@@ -701,7 +712,7 @@ function Profile() {
                 type="text"
                 value={profile.pfNumber}
                 onChange={handleChange}
-                disabled={isLocked}
+                disabled={profile.statutoryLocked}
                 className="mt-1"
               />
             </div>
@@ -713,7 +724,7 @@ function Profile() {
                 type="text"
                 value={profile.uanNumber}
                 onChange={handleChange}
-                disabled={isLocked}
+                disabled={profile.statutoryLocked}
                 className="mt-1"
               />
             </div>
@@ -725,7 +736,7 @@ function Profile() {
                 type="text"
                 value={profile.esiNumber}
                 onChange={handleChange}
-                disabled={isLocked}
+                disabled={profile.statutoryLocked}
                 className="mt-1"
               />
             </div>
@@ -768,7 +779,7 @@ function Profile() {
                       type="file"
                       accept={doc.accept}
                       onChange={handleChange}
-                      disabled={isLocked}
+                      disabled={profile.documentsLocked}
                       className={fileErrors[doc.id] ? 'border-red-500 mt-1' : 'mt-1'}
                       required={doc.id !== 'postgraduationDocs' && doc.id !== 'experienceCertificate' && (!doc.conditional || (profile.documents.includes('experienceCertificate') || files.experienceCertificate))}
                     />
@@ -789,7 +800,7 @@ function Profile() {
                 name="paymentType"
                 value={profile.paymentType}
                 onChange={handleChange}
-                disabled={lockedFields.includes('paymentType')}
+                disabled={lockedFields.includes('paymentType') || profile.paymentLocked}
                 className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 bg-white dark:bg-black"
               >
                 <option value="">Select</option>
@@ -807,7 +818,7 @@ function Profile() {
                     type="text"
                     value={profile.bankDetails.bankName}
                     onChange={handleChange}
-                    disabled={isLocked}
+                    disabled={profile.paymentLocked}
                     className="mt-1"
                   />
                 </div>
@@ -819,7 +830,7 @@ function Profile() {
                     type="text"
                     value={profile.bankDetails.bankBranch}
                     onChange={handleChange}
-                    disabled={isLocked}
+                    disabled={profile.paymentLocked}
                     className="mt-1"
                   />
                 </div>
@@ -831,7 +842,7 @@ function Profile() {
                     type="text"
                     value={profile.bankDetails.accountNumber}
                     onChange={handleChange}
-                    disabled={isLocked}
+                    disabled={profile.paymentLocked}
                     className="mt-1"
                   />
                 </div>
@@ -843,7 +854,7 @@ function Profile() {
                     type="text"
                     value={profile.bankDetails.ifscCode}
                     onChange={handleChange}
-                    disabled={isLocked}
+                    disabled={profile.paymentLocked}
                     className="mt-1"
                   />
                 </div>
