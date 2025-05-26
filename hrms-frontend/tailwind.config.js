@@ -2,7 +2,6 @@ import tailwindAnimate from "tailwindcss-animate";
 
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: ['selector', '[data-theme="dark"]'],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -10,65 +9,55 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-        xl: 'calc(var(--radius) + 4px)',
+        lg: '0.625rem', // --radius from index.css
+        md: 'calc(0.625rem - 2px)',
+        sm: 'calc(0.625rem - 4px)',
+        xl: 'calc(0.625rem + 4px)',
       },
       colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
+        background: 'hsl(0, 0%, 100%)', // --background: oklch(1 0 0)
+        foreground: 'hsl(0, 0%, 14.5%)', // --foreground: oklch(0.145 0 0)
         card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
+          DEFAULT: 'hsl(0, 0%, 100%)', // --card: oklch(1 0 0)
+          foreground: 'hsl(0, 0%, 14.5%)', // --card-foreground: oklch(0.145 0 0)
         },
         popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
+          DEFAULT: 'hsl(0, 0%, 100%)', // --popover: oklch(1 0 0)
+          foreground: 'hsl(0, 0%, 14.5%)', // --popover-foreground: oklch(0.145 0 0)
         },
         primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
+          DEFAULT: 'hsl(0, 0%, 20%)', // --primary: oklch(0.205 0 0)
+          foreground: 'hsl(0, 0%, 98.5%)', // --primary-foreground: oklch(0.985 0 0)
         },
         secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
+          DEFAULT: 'hsl(0, 0%, 97%)', // --secondary: oklch(0.97 0 0)
+          foreground: 'hsl(0, 0%, 20%)', // --secondary-foreground: oklch(0.205 0 0)
         },
         muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
+          DEFAULT: 'hsl(0, 0%, 97%)', // --muted: oklch(0.97 0 0)
+          foreground: 'hsl(0, 0%, 55.6%)', // --muted-foreground: oklch(0.556 0 0)
         },
         accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
+          DEFAULT: 'hsl(0, 0%, 97%)', // --accent: oklch(0.97 0 0)
+          foreground: 'hsl(0, 0%, 20%)', // --accent-foreground: oklch(0.205 0 0)
         },
         destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
+          DEFAULT: 'hsl(24.2, 77.4%, 45.1%)', // --destructive: oklch(0.577 0.245 27.325)
+          foreground: 'hsl(24.2, 77.4%, 45.1%)', // --destructive-foreground: oklch(0.577 0.245 27.325)
         },
-        border: 'hsl(var(--border))',
-        input: 'hsl(var(--input))',
-        ring: 'hsl(var(--ring))',
+        border: 'hsl(0, 0%, 92.2%)', // --border: oklch(0.922 0 0)
+        input: 'hsl(0, 0%, 92.2%)', // --input: oklch(0.922 0 0)
+        ring: 'hsl(0, 0%, 70.8%)', // --ring: oklch(0.708 0 0)
         chart: {
-          '1': 'hsl(var(--chart-1))',
-          '2': 'hsl(var(--chart-2))',
-          '3': 'hsl(var(--chart-3))',
-          '4': 'hsl(var(--chart-4))',
-          '5': 'hsl(var(--chart-5))',
-        },
-        sidebar: {
-          DEFAULT: 'hsl(var(--sidebar))',
-          foreground: 'hsl(var(--sidebar-foreground))',
-          primary: 'hsl(var(--sidebar-primary))',
-          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-          accent: 'hsl(var(--sidebar-accent))',
-          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-          border: 'hsl(var(--sidebar-border))',
-          ring: 'hsl(var(--sidebar-ring))',
+          '1': 'hsl(35.7, 71.4%, 56.3%)', // --chart-1: oklch(0.646 0.222 41.116)
+          '2': 'hsl(183.4, 28.6%, 47.8%)', // --chart-2: oklch(0.6 0.118 184.704)
+          '3': 'hsl(220.9, 17.3%, 33.1%)', // --chart-3: oklch(0.398 0.07 227.392)
+          '4': 'hsl(82.8, 62.7%, 74.1%)', // --chart-4: oklch(0.828 0.189 84.429)
+          '5': 'hsl(65.7, 58.7%, 67.8%)', // --chart-5: oklch(0.769 0.188 70.08)
         },
       },
       spacing: {
-        radius: 'var(--radius)',
+        radius: '0.625rem',
       },
       animation: {
         shine: 'shine 3s linear infinite',

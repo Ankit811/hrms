@@ -21,6 +21,39 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
       return res.status(400).json({ message: 'Employee department is required' });
     }
 
+    const leaveDays = req.body.halfDay ? 0.5 :
+      (req.body.fullDay?.to
+        ? ((new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
+        : 1);
+
+    // Validate leave dates
+    let leaveStart, leaveEnd;
+    if (req.body.halfDay?.date) {
+      leaveStart = new Date(req.body.halfDay.date);
+      leaveEnd = new Date(req.body.halfDay.date);
+    } else if (req.body.fullDay?.from && req.body.fullDay?.to) {
+      leaveStart = new Date(req.body.fullDay.from);
+      leaveEnd = new Date(req.body.fullDay.to);
+      if (leaveStart > leaveEnd) {
+        return res.status(400).json({ message: 'Leave start date cannot be after end date' });
+      }
+    } else {
+      return res.status(400).json({ message: 'Either halfDay or fullDay dates are required' });
+    }
+
+    // Check if employee has enough paid leaves (if applicable)
+    if (req.body.leaveType === 'Paid' && !req.body.isCompensatory) {
+      if (user.paidLeaves < leaveDays) {
+        return res.status(400).json({ message: 'Not enough paid leave balance' });
+      }
+
+      // Check for three consecutive paid leaves
+      const canTakeLeave = await user.checkConsecutivePaidLeaves(leaveStart, leaveEnd);
+      if (!canTakeLeave) {
+        return res.status(400).json({ message: 'Cannot take three consecutive paid leaves' });
+      }
+    }
+
     const leave = new Leave({
       employeeId: user.employeeId,
       employee: user._id,
@@ -38,24 +71,7 @@ router.post('/', auth, role(['Employee', 'HOD']), async (req, res) => {
       compensatoryDetails: req.body.compensatoryDetails,
     });
 
-    const leaveDays = req.body.halfDay ? 0.5 :
-      (req.body.fullDay?.to
-        ? ((new Date(req.body.fullDay.to) - new Date(req.body.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
-        : 1);
-
-    if (req.body.leaveType === 'Paid' && user.paidLeaves < leaveDays && !req.body.isCompensatory) {
-      return res.status(400).json({ message: 'Not enough paid leave balance' });
-    }
-
     await leave.save();
-
-    if (req.body.leaveType === 'Paid' && !req.body.isCompensatory) {
-      user.paidLeaves -= leaveDays;
-    } else if (req.body.leaveType === 'Unpaid') {
-      user.unpaidLeavesTaken += leaveDays;
-    }
-
-    await user.save();
 
     const hod = await Employee.findOne({ department: user.department, loginType: 'HOD' });
     const admin = await Employee.findOne({ loginType: 'Admin' });
@@ -106,7 +122,7 @@ router.get('/', auth, async (req, res) => {
           { 'status.ceo': status }
         ];
       } else {
-        filter = {}; // Show all leaves for Admin when status is 'all'
+        filter = {};
       }
     } else if (req.user.role === 'CEO') {
       if (status && status !== 'all') {
@@ -116,7 +132,7 @@ router.get('/', auth, async (req, res) => {
           { 'status.ceo': status }
         ];
       } else {
-        filter = {}; // Show all leaves for CEO when status is 'all'
+        filter = {};
       }
     } else {
       return res.status(403).json({ message: 'Unauthorized role' });
@@ -131,26 +147,37 @@ router.get('/', auth, async (req, res) => {
       }
     }
 
-    if (fromDate) {
-      filter.$or = filter.$or || [];
-      filter.$or.push(
-        { 'fullDay.from': { $gte: new Date(fromDate) } },
-        { 'halfDay.date': { $gte: new Date(fromDate) } },
-        { createdAt: { $gte: new Date(fromDate) } }
-      );
-    }
+    // Apply date range filter
+    if (fromDate || toDate) {
+      const dateConditions = [];
 
-    if (toDate) {
-      filter.$or = filter.$or || [];
-      filter.$or.push(
-        { 'fullDay.to': { $lte: new Date(toDate) } },
-        { 'halfDay.date': { $lte: new Date(toDate) } },
-        { createdAt: { $lte: new Date(toDate) } }
-      );
+      if (fromDate) {
+        dateConditions.push({
+          $or: [
+            { 'fullDay.from': { $gte: new Date(fromDate) } },
+            { 'halfDay.date': { $gte: new Date(fromDate) } }
+          ]
+        });
+      }
+
+      if (toDate) {
+        const toDateEnd = new Date(toDate);
+        toDateEnd.setHours(23, 59, 59, 999); // Include entire toDate
+        dateConditions.push({
+          $or: [
+            { 'fullDay.to': { $lte: toDateEnd } },
+            { 'halfDay.date': { $lte: toDateEnd } }
+          ]
+        });
+      }
+
+      if (dateConditions.length > 0) {
+        filter.$and = dateConditions;
+      }
     }
 
     console.log('User role:', req.user.role, 'Employee ID:', req.user.employeeId);
-    console.log('Fetching leaves with filter:', filter);
+    console.log('Fetching leaves with filter:', JSON.stringify(filter, null, 2));
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const leaves = await Leave.find(filter)
@@ -199,6 +226,18 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     } else if (req.user.role === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending') {
       leave.status.ceo = req.body.status;
       approverMessage = `Your leave request was ${req.body.status.toLowerCase()} by CEO`;
+
+      // If fully approved, deduct paid leaves or increment unpaid leaves taken
+      if (req.body.status === 'Approved') {
+        const leaveStart = leave.halfDay?.date || leave.fullDay?.from;
+        const leaveEnd = leave.halfDay?.date || leave.fullDay?.to;
+
+        if (leave.leaveType === 'Paid' && !leave.isCompensatory) {
+          await user.deductPaidLeaves(leaveStart, leaveEnd);
+        } else if (leave.leaveType === 'Unpaid') {
+          await user.incrementUnpaidLeaves(leaveStart, leaveEnd);
+        }
+      }
     } else {
       return res.status(403).json({ message: 'Not authorized to approve this leave' });
     }

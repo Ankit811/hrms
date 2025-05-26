@@ -93,22 +93,23 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [allowSubmit, setAllowSubmit] = useState(false);
-  const [documentMetadata, setDocumentMetadata] = useState([]); // New state for document metadata
+  const [documentMetadata, setDocumentMetadata] = useState([]);
 
   const submitButtonRef = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [deptRes, empRes] = await Promise.all([
+        const [deptRes, empRes, docRes] = await Promise.all([
           api.get('/departments'),
           api.get('/employees'),
-          api.get(`/employees/${employee._id}/documents`), // Fetch document metadata
+          api.get(`/employees/${employee._id}/documents`),
         ]);
         setDepartments(deptRes.data.filter(dept => dept._id && dept._id.trim() !== ''));
         setManagers(
           empRes.data.filter(emp => ['HOD', 'Admin', 'CEO'].includes(emp.loginType) && emp._id && emp._id.trim() !== '')
         );
+        setDocumentMetadata(docRes.data); // Properly set document metadata
       } catch (err) {
         console.error('Error fetching data:', err);
       }
@@ -183,7 +184,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       const file = fileList[0];
       const newErrors = { ...errors };
 
-      // Validate file type and size
       if (name === 'profilePicture') {
         if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
           newErrors[name] = 'Profile Picture must be a JPEG/JPG image';
@@ -196,7 +196,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         if (file.type !== 'application/pdf') {
           newErrors[name] = `${name.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
         } else {
-          // Additional size validation for PDFs
           const maxSize = name === 'salarySlips' || name === 'panCard' || name === 'aadharCard' || name === 'bankPassbook' ? 1 * 1024 * 1024 :
                           name === 'medicalCertificate' || name === 'backgroundVerification' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
           if (file.size > maxSize) {
@@ -349,7 +348,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
 
     setLoading(true);
     const formData = new FormData();
-    // Ensure employeeId is included
     formData.append('employeeId', form.employeeId);
     Object.keys(form).forEach(key => {
       if (form[key] && form[key] !== null && key !== 'employeeId') {
@@ -362,7 +360,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       }
     });
 
-    // Log FormData contents for debugging
     for (let [key, value] of formData.entries()) {
       console.log(`FormData: ${key} =`, value);
     }
@@ -388,7 +385,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     }
   };
 
-  // Component to handle viewing files
   const FileViewer = ({ fileId }) => {
     const { handleViewFile } = useFileHandler(fileId);
     return (
@@ -830,7 +826,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     key={index}
                     className={doc.conditional && !employee.documents?.includes('experienceCertificate') && !files.experienceCertificate ? 'hidden' : 'flex flex-col'}
                   >
-                    <strong className="mb-1">{doc.label}:</strong>
+                    <strong className="mb-1">{getDocumentLabel(doc.fieldname)}:</strong>
                     {fileId && (
                       <div className="mb-2">
                         <FileViewer fileId={fileId} />
@@ -939,7 +935,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         closeOnOverlayClick={false}
         closeOnEsc={false}
       >
-        <DialogContent className="max-w-4xl bg-white dark:bg-black border">
+        <DialogContent className="max-w-4xl">
           <DialogTitle>Update Employee Information</DialogTitle>
           <DialogDescription>
             Update the details of the employee below. Navigate through the steps to edit all sections.
@@ -950,7 +946,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Card className="shadow-lg bg-white dark:bg-black border">
+              <Card className="shadow-lg bg-white">
                 <CardContent className="p-6">
                   <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
                     {renderStep()}

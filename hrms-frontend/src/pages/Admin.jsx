@@ -8,7 +8,7 @@ import EmployeeForm from '../components/EmployeeForm';
 import Attendance from '../components/Attendance';
 import LeaveForm from '../components/LeaveForm';
 import LeaveList from '../components/LeaveList';
-import Report from '../components/Report';
+import MyDashboard from '../components/EmployeeDashboard'
 
 function Admin() {
   return (
@@ -17,13 +17,13 @@ function Admin() {
       <div className="flex-1 pt-16">
         <Routes>
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="employee-dashboard" element={<MyDashboard/>} />
           <Route path="profile" element = { <Profile />} />
           <Route path="employees" element={<EmployeeList />} />
           <Route path="add-employee" element={<EmployeeForm />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="leave" element={<LeaveForm />} />
           <Route path="approve-leave" element={<LeaveList />} />
-          <Route path="reports" element={<Report />} />
         </Routes>
       </div>
     </div>

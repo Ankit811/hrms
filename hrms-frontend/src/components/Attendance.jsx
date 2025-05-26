@@ -136,7 +136,7 @@ function Attendance() {
             className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
           />
           <div className="flex gap-2">
-            <button onClick={handleFilter} className="px-4 py-2 border border-border rounded-md bg-white dark:bg-black">
+            <button onClick={handleFilter} className="px-4 py-2 border border-border rounded-md bg-background">
               Filter
             </button>
           </div>
@@ -148,7 +148,7 @@ function Attendance() {
         ) : error ? (
           <p className="text-sm text-red-500">{error}</p>
         ) : paginatedAttendance.length === 0 ? (
-          <div className="text-center py-8 rounded-lg bg-white dark:bg-black border">
+          <div className="text-center py-8 rounded-lg bg-background">
             <p className="text-lg font-semibold">No attendance records found.</p>
           </div>
         ) : (

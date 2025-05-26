@@ -50,6 +50,7 @@ const io = new Server(server, {
 global._io = io;
 
 const authRoutes = require('./routes/auth');
+const dashboardRoutes = require('./routes/dashboard');
 const employeeRoutes = require('./routes/employees');
 const departmentRoutes = require('./routes/departments');
 const attendanceRoutes = require('./routes/attendance');
@@ -57,6 +58,7 @@ const leaveRoutes = require('./routes/leaves');
 const notificationRoutes = require('./routes/notifications');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/attendance', attendanceRoutes);
@@ -87,10 +89,10 @@ mongoose.connect(process.env.MONGO_URI)
         });
 
         // Schedule processLateArrivalsAndAbsents at 9:30 AM daily
-        cron.schedule('31 9 * * *', async () => {
-          console.log('Running processLateArrivalsAndAbsents at 9:31 AM...');
+        cron.schedule('30 9 * * *', async () => {
+          console.log('Running processLateArrivalsAndAbsents at 9:30 AM...');
           await processLateArrivalsAndAbsents();
-          console.log('processLateArrivalsAndAbsents at 9:31 AM completed.');
+          console.log('processLateArrivalsAndAbsents at 9:30 AM completed.');
         });
 
         const PORT = process.env.PORT || 5000;

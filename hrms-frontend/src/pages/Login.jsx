@@ -43,7 +43,7 @@ function Login() {
       }
       const userType = loggedInUser.loginType.toLowerCase();
       if (userType === 'employee') {
-        navigate(`/${userType}/profile`);
+        navigate(`/${userType}/employee-dashboard`);
       } else {
         navigate(`/${userType}/dashboard`);
       }

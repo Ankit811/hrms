@@ -55,15 +55,16 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
               {profilePictureError ? (
                 <p className="text-red-500">Failed to load profile picture</p>
               ) : (
-                <img
-                  src={profilePictureSrc || 'https://via.placeholder.com/96?text=User'}
-                  alt="Profile"
-                  className="w-24 h-24 rounded-full object-cover"
-                />
+                <button onClick={handleViewProfilePicture}>
+                  <img
+                    src={profilePictureSrc || 'https://via.placeholder.com/96?text=User'}
+                    alt="Profile"
+                    className="w-24 h-24 rounded-full object-cover"
+                  />
+                </button>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Existing basic info fields */}
               <div>
                 <strong>Employee No.:</strong> {employee.employeeId}
               </div>
@@ -226,7 +227,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
               const fileId = doc.fieldname === 'profilePicture' ? employee.profilePicture : docMeta?.id;
               return (
                 <div key={index}>
-                  <strong>{doc.label}:</strong>{' '}
+                  <strong>{getDocumentLabel(doc.fieldname)}:</strong>{' '}
                   {fileId ? (
                     <FileViewer fileId={fileId} />
                   ) : (
@@ -300,7 +301,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl bg-white dark:bg-black">
+      <DialogContent className="max-w-4xl">
         <DialogTitle>Employee Details</DialogTitle>
         <DialogDescription>
           View the details of the employee below. Navigate through the steps to see all sections.
@@ -310,7 +311,7 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Card className="bg-white dark:bg-black shadow-lg border">
+          <Card className="shadow-lg border">
             <CardContent className="p-6 max-h-[80vh] overflow-y-auto">
               <div className="mb-6">
                 <h2 className="text-xl font-semibold">

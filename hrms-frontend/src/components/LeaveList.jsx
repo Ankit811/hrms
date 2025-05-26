@@ -74,7 +74,18 @@ function LeaveList() {
   }, [fetchLeaves]);
 
   const handleFilterChange = (name, value) => {
-    const newFilters = { ...filters, [name]: value };
+    let newFilters = { ...filters, [name]: value };
+
+    // Validate date range
+    if (name === 'fromDate' || name === 'toDate') {
+      const fromDate = name === 'fromDate' ? value : filters.fromDate;
+      const toDate = name === 'toDate' ? value : filters.toDate;
+      if (fromDate && toDate && new Date(toDate) < new Date(fromDate)) {
+        setError('To Date cannot be earlier than From Date.');
+        return;
+      }
+    }
+
     setFilters(newFilters);
     setPage(1); // Reset to first page on filter change
     const query = new URLSearchParams({
@@ -201,7 +212,7 @@ function LeaveList() {
             </div>
 
             {/* From Date Filter */}
-            {/* <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="fromDate" className="text-sm font-medium text-gray-700">
                 From Date
               </Label>
@@ -215,10 +226,10 @@ function LeaveList() {
                 aria-label="From Date"
                 disabled={loading}
               />
-            </div> */}
+            </div>
 
             {/* To Date Filter */}
-            {/* <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="toDate" className="text-sm font-medium text-gray-700">
                 To Date
               </Label>
@@ -232,7 +243,7 @@ function LeaveList() {
                 aria-label="To Date"
                 disabled={loading}
               />
-            </div> */}
+            </div>
           </div>
 
           {/* Table */}

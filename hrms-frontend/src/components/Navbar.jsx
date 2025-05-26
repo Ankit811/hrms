@@ -4,14 +4,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Transition } from '@headlessui/react';
 import Notification from './Notification';
 import { AuthContext } from '../context/AuthContext';
-import { ThemeContext } from '../context/ThemeContext';
 import logo from '../assets/logo.png';
 import io from 'socket.io-client';
-import { Menu as MenuIcon, Sun, Moon } from 'lucide-react';
+import { Menu as MenuIcon } from 'lucide-react';
 
 function Navbar() {
   const { user, logout, loading } = useContext(AuthContext);
-  const { mode, toggleTheme } = useContext(ThemeContext);
   const navigate = useNavigate();
   const location = useLocation();
   const socketRef = useRef(null);
@@ -19,12 +17,12 @@ function Navbar() {
   const menuItems = {
     Admin: [
       { text: 'Dashboard', path: '/admin/dashboard' },
+      { text: 'My Dashboard', path: '/admin/employee-dashboard' },
       { text: 'Employees', path: '/admin/employees' },
       { text: 'Add Employee', path: '/admin/add-employee' },
       { text: 'Attendance', path: '/admin/attendance' },
       { text: 'Apply Leave', path: '/admin/leave' },
       { text: 'Approve Leave', path: '/admin/approve-leave' },
-      { text: 'Reports', path: '/admin/reports' },
     ],
     CEO: [
       { text: 'Dashboard', path: '/ceo/dashboard' },
@@ -33,11 +31,13 @@ function Navbar() {
     ],
     HOD: [
       { text: 'Dashboard', path: '/hod/dashboard' },
+      { text: 'My Dashboard', path: '/hod/employee-dashboard' },
       { text: 'Employees', path: '/hod/employees' },
       { text: 'Apply Leave', path: '/hod/leave' },
       { text: 'Approve Leave', path: '/hod/approve-leave' },
     ],
     Employee: [
+      { text: 'My Dashboard', path: '/employee/employee-dashboard' },
       { text: 'Apply Leave', path: '/employee/leave' },
     ],
   };
@@ -48,7 +48,7 @@ function Navbar() {
       Admin: '/admin/dashboard',
       CEO: '/ceo/dashboard',
       HOD: '/hod/dashboard',
-      Employee: '/employee/profile',
+      Employee: '/employee/employee-dashboard', // Updated default path
     };
     navigate(defaultPaths[user?.loginType] || '/');
   };
@@ -91,7 +91,7 @@ function Navbar() {
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 120 }}
-        className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 "
+        className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 rounded-md"
       >
         <div className="flex items-center justify-between h-full px-4 md:px-6">
           <motion.img
@@ -114,7 +114,7 @@ function Navbar() {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ type: 'spring', stiffness: 120 }}
-      className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 dark:bg-gray-500 rounded-md"
+      className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 rounded-md"
     >
       <div className="flex items-center justify-between h-full px-4 md:px-6">
         {/* Left Section: Logo and Tabs */}
@@ -189,14 +189,6 @@ function Navbar() {
         </div>
 
         <div className="flex items-center space-x-4">
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            className="text-muted-foreground hover:text-foreground cursor-pointer"
-            onClick={toggleTheme}
-          >
-            {mode === 'light' ? <Moon className="h-6 w-6" /> : <Sun className="h-6 w-6" />}
-          </motion.div>
-
           <Notification />
 
           {user ? (
@@ -213,7 +205,7 @@ function Navbar() {
                 leaveFrom="transform opacity-100 scale-100"
                 leaveTo="transform opacity-0 scale-95"
               >
-                <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50 bg-white dark:bg-black border">
+                <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50 border">
                   <div className="px-4 py-2 border-b border-border">
                     <p className="text-sm font-medium text-foreground">{user.name || 'Guest'}</p>
                     <p className="text-xs text-muted-foreground">{user.email || 'No email'}</p>

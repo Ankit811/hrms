@@ -10,7 +10,6 @@ function CEO() {
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
-      <Sidebar />
       <div className="flex-1 pt-16">
         <Routes>
           <Route path="dashboard" element={<Dashboard />} />

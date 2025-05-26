@@ -6,6 +6,7 @@ import Profile from '../components/Profile';
 import EmployeeList from '../components/EmployeeList';
 import LeaveForm from '../components/LeaveForm';
 import LeaveList from '../components/LeaveList';
+import MyDashboard from '../components/EmployeeDashboard'
 
 function HOD() {
   return (
@@ -14,6 +15,7 @@ function HOD() {
       <div className="flex-1 pt-16">
         <Routes>
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="employee-dashboard" element={<MyDashboard/>} />
           <Route path="profile" element={<Profile />} />
           <Route path="employees" element={<EmployeeList />} />
           <Route path="leave" element={<LeaveForm />} />
