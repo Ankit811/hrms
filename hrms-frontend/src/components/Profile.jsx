@@ -26,6 +26,7 @@ function Profile() {
     currentAddress: '',
     email: '',
     aadharNumber: '',
+    bloodGroup: '',
     gender: '',
     maritalStatus: '',
     spouseName: '',
@@ -34,6 +35,8 @@ function Profile() {
     dateOfJoining: '',
     reportingManager: { name: '' },
     status: '',
+    dateOfResigning: '',
+    employeeType: '',
     probationPeriod: '',
     confirmationDate: '',
     referredBy: '',
@@ -41,7 +44,6 @@ function Profile() {
     designation: '',
     location: '',
     department: { name: '' },
-    employeeType: '',
     panNumber: '',
     pfNumber: '',
     uanNumber: '',
@@ -117,6 +119,7 @@ function Profile() {
           currentAddress: res.data.currentAddress || '',
           email: res.data.email || '',
           aadharNumber: res.data.aadharNumber || '',
+          bloodGroup: res.data.bloodGroup || '',
           gender: res.data.gender || '',
           maritalStatus: res.data.maritalStatus || '',
           spouseName: res.data.spouseName || '',
@@ -125,14 +128,15 @@ function Profile() {
           dateOfJoining: res.data.dateOfJoining ? new Date(res.data.dateOfJoining).toISOString().split('T')[0] : '',
           reportingManager: res.data.reportingManager || { name: '' },
           status: res.data.status || '',
-          probationPeriod: res.data.probationPeriod || '',
-          confirmationDate: res.data.confirmationDate ? new Date(res.data.confirmationDate).toISOString().split('T')[0] : '',
+          dateOfResigning: res.data.dateOfResigning ? new Date(res.data.dateOfResigning).toISOString().split('T')[0] : '',
+          employeeType: res.data.status === 'Working' ? res.data.employeeType || '' : '',
+          probationPeriod: res.data.status === 'Working' && res.data.employeeType === 'Probation' ? res.data.probationPeriod || '' : '',
+          confirmationDate: res.data.status === 'Working' && res.data.employeeType === 'Probation' ? (res.data.confirmationDate ? new Date(res.data.confirmationDate).toISOString().split('T')[0] : '') : '',
           referredBy: res.data.referredBy || '',
           loginType: res.data.loginType || '',
           designation: res.data.designation || '',
           location: res.data.location || '',
           department: res.data.department || { name: '' },
-          employeeType: res.data.employeeType || '',
           panNumber: res.data.panNumber || '',
           pfNumber: res.data.pfNumber || '',
           uanNumber: res.data.uanNumber || '',
@@ -209,7 +213,20 @@ function Profile() {
         [parent]: { ...profile[parent], [child]: value },
       });
     } else {
-      setProfile({ ...profile, [name]: value });
+      setProfile((prevProfile) => {
+        const updatedProfile = { ...prevProfile, [name]: value };
+        if (name === 'status') {
+          updatedProfile.dateOfResigning = value === 'Working' ? '' : updatedProfile.dateOfResigning;
+          updatedProfile.employeeType = value === 'Working' ? updatedProfile.employeeType : '';
+          updatedProfile.probationPeriod = value === 'Working' && updatedProfile.employeeType === 'Probation' ? updatedProfile.probationPeriod : '';
+          updatedProfile.confirmationDate = value === 'Working' && updatedProfile.employeeType === 'Probation' ? updatedProfile.confirmationDate : '';
+        }
+        if (name === 'employeeType' && value !== 'Probation') {
+          updatedProfile.probationPeriod = '';
+          updatedProfile.confirmationDate = '';
+        }
+        return updatedProfile;
+      });
     }
   };
 
@@ -243,8 +260,47 @@ function Profile() {
       return;
     }
 
-    if (!profile.name || !profile.mobileNumber) {
-      alert('Name and Mobile Number are required.');
+    const errors = {};
+    // Basic Information Validation
+    const basicFields = [
+      'name', 'mobileNumber', 'dateOfBirth', 'fatherName', 'motherName',
+      'permanentAddress', 'currentAddress', 'email', 'aadharNumber',
+      'bloodGroup', 'gender', 'maritalStatus', 'emergencyContactName',
+      'emergencyContactNumber', 'dateOfJoining', 'status',
+    ];
+    basicFields.forEach(field => {
+      if (!profile[field] || profile[field].toString().trim() === '') {
+        errors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
+      }
+    });
+    if (profile.maritalStatus === 'Married' && (!profile.spouseName || profile.spouseName.trim() === '')) {
+      errors.spouseName = 'Spouse Name is required';
+    }
+    if (profile.status === 'Resigned' && (!profile.dateOfResigning || profile.dateOfResigning.trim() === '')) {
+      errors.dateOfResigning = 'Date of Resigning is required';
+    }
+    if (profile.status === 'Working' && (!profile.employeeType || profile.employeeType.trim() === '')) {
+      errors.employeeType = 'Employee Type is required';
+    }
+    if (profile.status === 'Working' && profile.employeeType === 'Probation' && (!profile.probationPeriod || !profile.confirmationDate)) {
+      errors.probationPeriod = 'Probation Period is required';
+      errors.confirmationDate = 'Confirmation Date is required';
+    }
+    if (profile.email && !/\S+@\S+\.\S+/.test(profile.email)) {
+      errors.email = 'Valid email is required';
+    }
+    if (profile.aadharNumber && !/^\d{12}$/.test(profile.aadharNumber)) {
+      errors.aadharNumber = 'Aadhar Number must be exactly 12 digits';
+    }
+    if (profile.mobileNumber && !/^\d{10}$/.test(profile.mobileNumber)) {
+      errors.mobileNumber = 'Mobile Number must be exactly 10 digits';
+    }
+    if (profile.bloodGroup && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(profile.bloodGroup)) {
+      errors.bloodGroup = 'Invalid blood group';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      alert('Please fix the following errors:\n' + Object.values(errors).join('\n'));
       return;
     }
 
@@ -473,6 +529,22 @@ function Profile() {
                 />
               </div>
               <div>
+                <Label htmlFor="bloodGroup">Blood Group</Label>
+                <select
+                  id="bloodGroup"
+                  name="bloodGroup"
+                  value={profile.bloodGroup}
+                  onChange={handleChange}
+                  disabled={profile.basicInfoLocked}
+                  className="mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-100 bg-white dark:bg-black"
+                >
+                  <option value="">Select</option>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                    <option key={bg} value={bg}>{bg}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <Label htmlFor="gender">Gender</Label>
                 <select
                   id="gender"
@@ -576,37 +648,71 @@ function Profile() {
                   className="mt-1 block w-full rounded-md border shadow-sm bg-white dark:bg-black"
                 >
                   <option value="">Select</option>
-                  <option value="Active">Active</option>
-                  <option value="Probation">Probation</option>
-                  <option value="Inactive">Inactive</option>
+                  <option value="Working">Working</option>
+                  <option value="Resigned">Resigned</option>
                 </select>
               </div>
-              {profile.status === 'Probation' && (
+              {profile.status === 'Resigned' && (
+                <div>
+                  <Label htmlFor="dateOfResigning">Date of Resigning</Label>
+                  <Input
+                    id="dateOfResigning"
+                    name="dateOfResigning"
+                    type="date"
+                    value={profile.dateOfResigning}
+                    onChange={handleChange}
+                    disabled={profile.basicInfoLocked}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+              {profile.status === 'Working' && (
                 <>
                   <div>
-                    <Label htmlFor="probationPeriod">Probation Period (Months)</Label>
-                    <Input
-                      id="probationPeriod"
-                      name="probationPeriod"
-                      type="text"
-                      value={profile.probationPeriod}
+                    <Label htmlFor="employeeType">Employee Type</Label>
+                    <select
+                      id="employeeType"
+                      name="employeeType"
+                      value={profile.employeeType}
                       onChange={handleChange}
-                      disabled={lockedFields.includes('probationPeriod') || profile.basicInfoLocked}
-                      className="mt-1"
-                    />
+                      disabled={profile.basicInfoLocked}
+                      className="mt-1 block w-full rounded-md border shadow-sm bg-white dark:bg-black"
+                    >
+                      <option value="">Select</option>
+                      <option value="Intern">Intern</option>
+                      <option value="Confirmed">Confirmed</option>
+                      <option value="Probation">Probation</option>
+                      <option value="Contractual">Contractual</option>
+                    </select>
                   </div>
-                  <div>
-                    <Label htmlFor="confirmationDate">Confirmation Date</Label>
-                    <Input
-                      id="confirmationDate"
-                      name="confirmationDate"
-                      type="date"
-                      value={profile.confirmationDate}
-                      onChange={handleChange}
-                      disabled={lockedFields.includes('confirmationDate') || profile.basicInfoLocked}
-                      className="mt-1"
-                    />
-                  </div>
+                  {profile.employeeType === 'Probation' && (
+                    <>
+                      <div>
+                        <Label htmlFor="probationPeriod">Probation Period (Months)</Label>
+                        <Input
+                          id="probationPeriod"
+                          name="probationPeriod"
+                          type="text"
+                          value={profile.probationPeriod}
+                          onChange={handleChange}
+                          disabled={lockedFields.includes('probationPeriod') || profile.basicInfoLocked}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="confirmationDate">Confirmation Date</Label>
+                        <Input
+                          id="confirmationDate"
+                          name="confirmationDate"
+                          type="date"
+                          value={profile.confirmationDate}
+                          onChange={handleChange}
+                          disabled={lockedFields.includes('confirmationDate') || profile.basicInfoLocked}
+                          className="mt-1"
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
               <div>
@@ -672,18 +778,6 @@ function Profile() {
                 value={profile.department.name}
                 onChange={handleChange}
                 disabled={lockedFields.includes('department.name') || profile.positionLocked}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="employeeType">Employee Type</Label>
-              <Input
-                id="employeeType"
-                name="employeeType"
-                type="text"
-                value={profile.employeeType}
-                onChange={handleChange}
-                disabled={profile.positionLocked}
                 className="mt-1"
               />
             </div>

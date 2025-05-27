@@ -8,15 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card, CardContent } from '../components/ui/card';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
-import * as XLSX from 'xlsx'; // <-- Add this line
+import * as XLSX from 'xlsx';
 
 const EXCEL_HEADERS = [
   'employeeId', 'userId', 'name', 'dateOfBirth', 'fatherName', 'motherName',
   'mobileNumber', 'permanentAddress', 'currentAddress', 'email', 'password',
-  'aadharNumber', 'gender', 'maritalStatus', 'spouseName', 'emergencyContactName',
+  'aadharNumber', 'bloodGroup', 'gender', 'maritalStatus', 'spouseName', 'emergencyContactName',
   'emergencyContactNumber', 'dateOfJoining', 'reportingManager', 'status',
-  'probationPeriod', 'confirmationDate', 'referredBy', 'loginType', 'designation',
-  'location', 'department', 'employeeType', 'panNumber', 'pfNumber', 'uanNumber',
+  'dateOfResigning', 'employeeType', 'probationPeriod', 'confirmationDate', 'referredBy', 'loginType', 'designation',
+  'location', 'department', 'panNumber', 'pfNumber', 'uanNumber',
   'esiNumber', 'paymentType', 'bankName', 'bankBranch', 'accountNumber', 'ifscCode'
 ];
 
@@ -36,6 +36,7 @@ function EmployeeForm() {
     email: '',
     password: '',
     aadharNumber: '',
+    bloodGroup: '',
     gender: '',
     maritalStatus: '',
     spouseName: '',
@@ -44,6 +45,8 @@ function EmployeeForm() {
     dateOfJoining: '',
     reportingManager: '',
     status: '',
+    dateOfResigning: '',
+    employeeType: '',
     probationPeriod: '',
     confirmationDate: '',
     referredBy: '',
@@ -51,7 +54,6 @@ function EmployeeForm() {
     designation: '',
     location: '',
     department: '',
-    employeeType: '',
     panNumber: '',
     pfNumber: '',
     uanNumber: '',
@@ -149,7 +151,9 @@ function EmployeeForm() {
     setForm({ ...form, [name]: value });
     setErrors({ ...errors, [name]: '' });
 
-    if (name === 'status' && value !== 'Probation') {
+    if (name === 'status' && value !== 'Working') {
+      setForm(prev => ({ ...prev, employeeType: '', probationPeriod: '', confirmationDate: '' }));
+    } else if (name === 'employeeType' && value !== 'Probation') {
       setForm(prev => ({ ...prev, probationPeriod: '', confirmationDate: '' }));
     }
   };
@@ -166,7 +170,7 @@ function EmployeeForm() {
       const requiredFields = [
         'employeeId', 'userId', 'name', 'dateOfBirth', 'fatherName', 'motherName',
         'mobileNumber', 'permanentAddress', 'currentAddress', 'email', 'password', 
-        'aadharNumber', 'gender', 'maritalStatus', 'emergencyContactName', 
+        'aadharNumber', 'bloodGroup', 'gender', 'maritalStatus', 'emergencyContactName', 
         'emergencyContactNumber', 'dateOfJoining', 'reportingManager', 'status', 
         'loginType'
       ];
@@ -178,7 +182,13 @@ function EmployeeForm() {
       if (form.maritalStatus === 'Married' && (!form.spouseName || form.spouseName.trim() === '')) {
         newErrors.spouseName = 'Spouse Name is required';
       }
-      if (form.status === 'Probation' && (!form.probationPeriod || !form.confirmationDate)) {
+      if (form.status === 'Resigned' && (!form.dateOfResigning || form.dateOfResigning.trim() === '')) {
+        newErrors.dateOfResigning = 'Date of Resigning is required';
+      }
+      if (form.status === 'Working' && (!form.employeeType || form.employeeType.trim() === '')) {
+        newErrors.employeeType = 'Employee Type is required';
+      }
+      if (form.status === 'Working' && form.employeeType === 'Probation' && (!form.probationPeriod || !form.confirmationDate)) {
         newErrors.probationPeriod = 'Probation Period is required';
         newErrors.confirmationDate = 'Confirmation Date is required';
       }
@@ -195,7 +205,7 @@ function EmployeeForm() {
         newErrors.mobileNumber = 'Mobile Number must be exactly 10 digits';
       }
     } else if (step === 2) {
-      const requiredFields = ['designation', 'location', 'department', 'employeeType'];
+      const requiredFields = ['designation', 'location', 'department'];
       requiredFields.forEach(field => {
         if (!form[field] || form[field].trim() === '') {
           newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
@@ -217,20 +227,6 @@ function EmployeeForm() {
         newErrors.esiNumber = 'ESI Number must be 12 digits';
       }
     } else if (step === 4) {
-      // const requiredFiles = ['tenthTwelfthDocs', 'graduationDocs', 'panCard', 'aadharCard', 'bankPassbook', 'medicalCertificate', 'backgroundVerification'];
-      // requiredFiles.forEach(field => {
-      //   if (!files[field]) {
-      //     newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
-      //   }
-      // });
-      // if (files.experienceCertificate && !files.salarySlips) {
-      //   newErrors.salarySlips = 'Last 3 Months Salary Slips is required';
-      // }
-      // Object.keys(files).forEach(field => {
-      //   if (files[field] && files[field].type !== 'application/pdf') {
-      //     newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} must be a PDF file`;
-      //   }
-      // });
       if (files.profilePicture) {
         if (files.profilePicture.type !== 'image/jpeg') {
           newErrors.profilePicture = 'Profile Picture must be a JPEG image';
@@ -313,10 +309,6 @@ function EmployeeForm() {
               { id: 'email', label: 'Email', type: 'email' },
               { id: 'password', label: 'Password', type: 'password', minLength: 6 },
               { id: 'aadharNumber', label: 'Aadhar Number', type: 'text', pattern: '[0-9]{12}' },
-              { id: 'emergencyContactName', label: 'Emergency Contact Name', type: 'text' },
-              { id: 'emergencyContactNumber', label: 'Emergency Contact Number', type: 'tel' },
-              { id: 'dateOfJoining', label: 'Date of Joining', type: 'date' },
-              { id: 'referredBy', label: 'Referred By', type: 'text' },
             ].map((field, index) => (
               <motion.div
                 key={field.id}
@@ -340,7 +332,21 @@ function EmployeeForm() {
                 {errors[field.id] && <p className="mt-1 text-sm text-red-500">{errors[field.id]}</p>}
               </motion.div>
             ))}
-            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.80 }}>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.60 }}>
+              <Label htmlFor="bloodGroup">Blood Group</Label>
+              <Select name="bloodGroup" value={form.bloodGroup} onValueChange={(value) => handleSelectChange('bloodGroup', value)} required>
+                <SelectTrigger className={errors.bloodGroup ? 'border-red-500' : ''}>
+                  <SelectValue placeholder="Select blood group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                    <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.bloodGroup && <p className="mt-1 text-sm text-red-500">{errors.bloodGroup}</p>}
+            </motion.div>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.65 }}>
               <Label htmlFor="gender">Gender</Label>
               <Select name="gender" value={form.gender} onValueChange={(value) => handleSelectChange('gender', value)} required>
                 <SelectTrigger className={errors.gender ? 'border-red-500' : ''}>
@@ -354,7 +360,7 @@ function EmployeeForm() {
               </Select>
               {errors.gender && <p className="mt-1 text-sm text-red-500">{errors.gender}</p>}
             </motion.div>
-            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.85 }}>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.70 }}>
               <Label htmlFor="maritalStatus">Marital Status</Label>
               <Select name="maritalStatus" value={form.maritalStatus} onValueChange={(value) => handleSelectChange('maritalStatus', value)} required>
                 <SelectTrigger className={errors.maritalStatus ? 'border-red-500' : ''}>
@@ -368,7 +374,7 @@ function EmployeeForm() {
               {errors.maritalStatus && <p className="mt-1 text-sm text-red-500">{errors.maritalStatus}</p>}
             </motion.div>
             {form.maritalStatus === 'Married' && (
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.90 }}>
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.75 }}>
                 <Label htmlFor="spouseName">Spouse Name</Label>
                 <Input
                   id="spouseName"
@@ -383,6 +389,47 @@ function EmployeeForm() {
                 {errors.spouseName && <p className="mt-1 text-sm text-red-500">{errors.spouseName}</p>}
               </motion.div>
             )}
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.80 }}>
+              <Label htmlFor="emergencyContactName">Emergency Contact Name</Label>
+              <Input
+                id="emergencyContactName"
+                name="emergencyContactName"
+                type="text"
+                value={form.emergencyContactName}
+                onChange={handleChange}
+                className={errors.emergencyContactName ? 'border-red-500' : ''}
+                placeholder="Enter emergency contact name"
+                required
+              />
+              {errors.emergencyContactName && <p className="mt-1 text-sm text-red-500">{errors.emergencyContactName}</p>}
+            </motion.div>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.85 }}>
+              <Label htmlFor="emergencyContactNumber">Emergency Contact Number</Label>
+              <Input
+                id="emergencyContactNumber"
+                name="emergencyContactNumber"
+                type="tel"
+                value={form.emergencyContactNumber}
+                onChange={handleChange}
+                className={errors.emergencyContactNumber ? 'border-red-500' : ''}
+                placeholder="Enter emergency contact number"
+                required
+              />
+              {errors.emergencyContactNumber && <p className="mt-1 text-sm text-red-500">{errors.emergencyContactNumber}</p>}
+            </motion.div>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.90 }}>
+              <Label htmlFor="dateOfJoining">Date of Joining</Label>
+              <Input
+                id="dateOfJoining"
+                name="dateOfJoining"
+                type="date"
+                value={form.dateOfJoining}
+                onChange={handleChange}
+                className={errors.dateOfJoining ? 'border-red-500' : ''}
+                required
+              />
+              {errors.dateOfJoining && <p className="mt-1 text-sm text-red-500">{errors.dateOfJoining}</p>}
+            </motion.div>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.95 }}>
               <Label htmlFor="reportingManager">Reporting Manager</Label>
               <Select name="reportingManager" value={form.reportingManager} onValueChange={(value) => handleSelectChange('reportingManager', value)} required>
@@ -404,16 +451,47 @@ function EmployeeForm() {
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Confirmed">Confirmed</SelectItem>
-                  <SelectItem value="Probation">Probation</SelectItem>
-                  <SelectItem value="Contractual">Contractual</SelectItem>
+                  <SelectItem value="Working">Working</SelectItem>
+                  <SelectItem value="Resigned">Resigned</SelectItem>
                 </SelectContent>
               </Select>
               {errors.status && <p className="mt-1 text-sm text-red-500">{errors.status}</p>}
             </motion.div>
-            {form.status === 'Probation' && (
+            {form.status === 'Resigned' && (
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.05 }}>
+                <Label htmlFor="dateOfResigning">Date of Resigning</Label>
+                <Input
+                  id="dateOfResigning"
+                  name="dateOfResigning"
+                  type="date"
+                  value={form.dateOfResigning}
+                  onChange={handleChange}
+                  className={errors.dateOfResigning ? 'border-red-500' : ''}
+                  required
+                />
+                {errors.dateOfResigning && <p className="mt-1 text-sm text-red-500">{errors.dateOfResigning}</p>}
+              </motion.div>
+            )}
+            {form.status === 'Working' && (
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.10 }}>
+                <Label htmlFor="employeeType">Employee Type</Label>
+                <Select name="employeeType" value={form.employeeType} onValueChange={(value) => handleSelectChange('employeeType', value)} required>
+                  <SelectTrigger className={errors.employeeType ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Select employee type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Intern">Intern</SelectItem>
+                    <SelectItem value="Confirmed">Confirmed</SelectItem>
+                    <SelectItem value="Probation">Probation</SelectItem>
+                    <SelectItem value="Contractual">Contractual</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.employeeType && <p className="mt-1 text-sm text-red-500">{errors.employeeType}</p>}
+              </motion.div>
+            )}
+            {form.status === 'Working' && form.employeeType === 'Probation' && (
               <>
-                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.05 }}>
+                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.15 }}>
                   <Label htmlFor="probationPeriod">Probation Period (Months)</Label>
                   <Input
                     id="probationPeriod"
@@ -427,7 +505,7 @@ function EmployeeForm() {
                   />
                   {errors.probationPeriod && <p className="mt-1 text-sm text-red-500">{errors.probationPeriod}</p>}
                 </motion.div>
-                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.10 }}>
+                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.20 }}>
                   <Label htmlFor="confirmationDate">Confirmation Date</Label>
                   <Input
                     id="confirmationDate"
@@ -442,7 +520,20 @@ function EmployeeForm() {
                 </motion.div>
               </>
             )}
-            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.15 }}>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.25 }}>
+              <Label htmlFor="referredBy">Referred By</Label>
+              <Input
+                id="referredBy"
+                name="referredBy"
+                type="text"
+                value={form.referredBy}
+                onChange={handleChange}
+                className={errors.referredBy ? 'border-red-500' : ''}
+                placeholder="Enter referred by"
+              />
+              {errors.referredBy && <p className="mt-1 text-sm text-red-500">{errors.referredBy}</p>}
+            </motion.div>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 1.30 }}>
               <Label htmlFor="loginType">Login Type</Label>
               <Select name="loginType" value={form.loginType} onValueChange={(value) => handleSelectChange('loginType', value)} required>
                 <SelectTrigger className={errors.loginType ? 'border-red-500' : ''}>
@@ -499,19 +590,6 @@ function EmployeeForm() {
                 </SelectContent>
               </Select>
               {errors.department && <p className="mt-1 text-sm text-red-500">{errors.department}</p>}
-            </motion.div>
-            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
-              <Label htmlFor="employeeType">Employee Type</Label>
-              <Select name="employeeType" value={form.employeeType} onValueChange={(value) => handleSelectChange('employeeType', value)} required>
-                <SelectTrigger className={errors.employeeType ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Select employee type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Intern">Intern</SelectItem>
-                  <SelectItem value="Staff">Staff</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.employeeType && <p className="mt-1 text-sm text-red-500">{errors.employeeType}</p>}
             </motion.div>
           </div>
         );
@@ -674,50 +752,50 @@ function EmployeeForm() {
               </div>
             </div>
             {/* Excel Upload Section */}
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '1rem' }}>
-            <Button type="button" variant="outline" onClick={handleDownloadTemplate}>
-              Download Excel Template
-            </Button>
-            <Input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={e => setExcelFile(e.target.files[0])}
-              style={{ width: 220 }}
-            />
-            <Button
-              type="button"
-              onClick={handleExcelUpload}
-              disabled={!excelFile || excelUploading}
-            >
-              {excelUploading ? 'Uploading...' : 'Upload Excel'}
-            </Button>
-          </div>
-          {excelUploadResult && (
-            <div>
-              {excelUploadResult.success && excelUploadResult.success.length > 0 && (
-                <div className="alert alert-success">
-                  {excelUploadResult.success.length} employees created successfully.
-                </div>
-              )}
-              {excelUploadResult.errors && excelUploadResult.errors.length > 0 && (
-                <div className="alert alert-danger">
-                  <b>Errors:</b>
-                  <ul>
-                    {excelUploadResult.errors.map((err, idx) => (
-                      <li key={idx}>
-                        {err.error}
-                        {err.row && (
-                          <pre style={{ fontSize: '0.8em', background: '#f8f9fa', padding: '0.5em' }}>
-                            {JSON.stringify(err.row, null, 2)}
-                          </pre>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '1rem' }}>
+              <Button type="button" variant="outline" onClick={handleDownloadTemplate}>
+                Download Excel Template
+              </Button>
+              <Input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => setExcelFile(e.target.files[0])}
+                style={{ width: 220 }}
+              />
+              <Button
+                type="button"
+                onClick={handleExcelUpload}
+                disabled={!excelFile || excelUploading}
+              >
+                {excelUploading ? 'Uploading...' : 'Upload Excel'}
+              </Button>
             </div>
-          )}
+            {excelUploadResult && (
+              <div>
+                {excelUploadResult.success && excelUploadResult.success.length > 0 && (
+                  <div className="alert alert-success">
+                    {excelUploadResult.success.length} employees created successfully.
+                  </div>
+                )}
+                {excelUploadResult.errors && excelUploadResult.errors.length > 0 && (
+                  <div className="alert alert-danger">
+                    <b>Errors:</b>
+                    <ul>
+                      {excelUploadResult.errors.map((err, idx) => (
+                        <li key={idx}>
+                          {err.error}
+                          {err.row && (
+                            <pre style={{ fontSize: '0.8em', background: '#f8f9fa', padding: '0.5em' }}>
+                              {JSON.stringify(err.row, null, 2)}
+                            </pre>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             <form onSubmit={step === 5 ? handleSubmit : handleNext}>
               {renderStep()}
               {errors.submit && (

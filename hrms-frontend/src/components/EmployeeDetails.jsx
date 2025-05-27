@@ -99,6 +99,9 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
                 <strong>Aadhar Number:</strong> {employee.aadharNumber}
               </div>
               <div>
+                <strong>Blood Group:</strong> {employee.bloodGroup || 'N/A'}
+              </div>
+              <div>
                 <strong>Gender:</strong> {employee.gender}
               </div>
               <div>
@@ -124,7 +127,17 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
               <div>
                 <strong>Status:</strong> {employee.status}
               </div>
-              {employee.status === 'Probation' && (
+              {employee.status === 'Resigned' && (
+                <div>
+                  <strong>Date of Resigning:</strong> {formatDate(employee.dateOfResigning)}
+                </div>
+              )}
+              {employee.status === 'Working' && (
+                <div>
+                  <strong>Employee Type:</strong> {employee.employeeType || 'N/A'}
+                </div>
+              )}
+              {employee.status === 'Working' && employee.employeeType === 'Probation' && (
                 <>
                   <div>
                     <strong>Probation Period:</strong> {employee.probationPeriod} months
@@ -164,9 +177,6 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
             </div>
             <div>
               <strong>Department:</strong> {employee.department?.name || 'N/A'}
-            </div>
-            <div>
-              <strong>Employee Type:</strong> {employee.employeeType}
             </div>
             {isAdmin && (
               <div className="col-span-2">

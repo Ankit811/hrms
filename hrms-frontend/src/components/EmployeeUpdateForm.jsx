@@ -49,6 +49,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     email: employee.email || '',
     password: '',
     aadharNumber: employee.aadharNumber || '',
+    bloodGroup: employee.bloodGroup || '',
     gender: employee.gender || '',
     maritalStatus: employee.maritalStatus || '',
     spouseName: employee.spouseName || '',
@@ -57,14 +58,15 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     dateOfJoining: employee.dateOfJoining ? new Date(employee.dateOfJoining).toISOString().split('T')[0] : '',
     reportingManager: employee.reportingManager?._id || null,
     status: employee.status || '',
-    probationPeriod: employee.probationPeriod || '',
-    confirmationDate: employee.confirmationDate ? new Date(employee.confirmationDate).toISOString().split('T')[0] : '',
+    dateOfResigning: employee.dateOfResigning ? new Date(employee.dateOfResigning).toISOString().split('T')[0] : '',
+    employeeType: employee.status === 'Working' ? employee.employeeType || '' : '',
+    probationPeriod: employee.status === 'Working' && employee.employeeType === 'Probation' ? employee.probationPeriod || '' : '',
+    confirmationDate: employee.status === 'Working' && employee.employeeType === 'Probation' ? (employee.confirmationDate ? new Date(employee.confirmationDate).toISOString().split('T')[0] : '') : '',
     referredBy: employee.referredBy || '',
     loginType: employee.loginType || '',
     designation: employee.designation || '',
     location: employee.location || '',
     department: employee.department?._id || null,
-    employeeType: employee.employeeType || '',
     panNumber: employee.panNumber || '',
     pfNumber: employee.pfNumber || '',
     uanNumber: employee.uanNumber || '',
@@ -109,7 +111,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         setManagers(
           empRes.data.filter(emp => ['HOD', 'Admin', 'CEO'].includes(emp.loginType) && emp._id && emp._id.trim() !== '')
         );
-        setDocumentMetadata(docRes.data); // Properly set document metadata
+        setDocumentMetadata(docRes.data);
       } catch (err) {
         console.error('Error fetching data:', err);
       }
@@ -163,7 +165,13 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
   const handleSelectChange = (name, value) => {
     setForm((prevForm) => {
       const updatedForm = { ...prevForm, [name]: value === '' ? null : value };
-      if (name === 'status' && value !== 'Probation') {
+      if (name === 'status') {
+        updatedForm.dateOfResigning = '';
+        updatedForm.employeeType = '';
+        updatedForm.probationPeriod = '';
+        updatedForm.confirmationDate = '';
+      }
+      if (name === 'employeeType' && value !== 'Probation') {
         updatedForm.probationPeriod = '';
         updatedForm.confirmationDate = '';
       }
@@ -220,7 +228,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       const requiredFields = [
         'name', 'dateOfBirth', 'fatherName', 'motherName',
         'mobileNumber', 'permanentAddress', 'currentAddress', 'email', 'aadharNumber',
-        'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber',
+        'bloodGroup', 'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber',
         'dateOfJoining', 'reportingManager', 'status', 'loginType',
       ];
       requiredFields.forEach(field => {
@@ -231,7 +239,13 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       if (form.maritalStatus === 'Married' && (!form.spouseName || form.spouseName.trim() === '')) {
         newErrors.spouseName = 'Spouse Name is required';
       }
-      if (form.status === 'Probation' && (!form.probationPeriod || !form.confirmationDate)) {
+      if (form.status === 'Resigned' && (!form.dateOfResigning || form.dateOfResigning.trim() === '')) {
+        newErrors.dateOfResigning = 'Date of Resigning is required';
+      }
+      if (form.status === 'Working' && (!form.employeeType || form.employeeType.trim() === '')) {
+        newErrors.employeeType = 'Employee Type is required';
+      }
+      if (form.status === 'Working' && form.employeeType === 'Probation' && (!form.probationPeriod || !form.confirmationDate)) {
         newErrors.probationPeriod = 'Probation Period is required';
         newErrors.confirmationDate = 'Confirmation Date is required';
       }
@@ -247,8 +261,11 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
       if (form.mobileNumber && !/^\d{10}$/.test(form.mobileNumber)) {
         newErrors.mobileNumber = 'Mobile Number must be exactly 10 digits';
       }
+      if (form.bloodGroup && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(form.bloodGroup)) {
+        newErrors.bloodGroup = 'Invalid blood group';
+      }
     } else if (currentStep === 2) {
-      const requiredFields = ['designation', 'location', 'department', 'employeeType'];
+      const requiredFields = ['designation', 'location', 'department'];
       requiredFields.forEach(field => {
         if (!form[field] || form[field].toString().trim() === '') {
           newErrors[field] = `${field.replace(/([A-Z])/g, ' $1').trim()} is required`;
@@ -267,8 +284,9 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
         newErrors.uanNumber = 'UAN Number must be 12 digits';
       }
       if (form.esiNumber && !/^\d{12}$/.test(form.esiNumber)) {
-        newErrors.esiNumber = 'ESI Number must be 12 digits';
+        newErrors.esiNumberForm = 'ESI Number must be 12 digits';
       }
+
     } else if (currentStep === 4) {
       const fileFields = [
         'profilePicture', 'tenthTwelfthDocs', 'graduationDocs', 'postgraduationDocs',
@@ -306,12 +324,11 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleNext = () => {
     if (!validateStep(step)) {
       console.error('Validation failed for step:', step, errors);
       return;
-    }
+    } 
     if (step < 5) {
       setStep(step + 1);
     }
@@ -361,7 +378,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     });
 
     for (let [key, value] of formData.entries()) {
-      console.log(`FormData: ${key} =`, value);
+      console.log(`FormData: ${key} = ${value}`);
     }
 
     try {
@@ -390,7 +407,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
     return (
       <button
         onClick={handleViewFile}
-        className="text-blue-600 bg-white dark:bg-black"
+        className="text-blue-600 bg-white dark:bg-gray-800"
       >
         View
       </button>
@@ -560,6 +577,20 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                 {errors.aadharNumber && <p className="mt-1 text-sm text-red-500">{errors.aadharNumber}</p>}
               </div>
               <div className="flex flex-col">
+                <strong className="mb-1">Blood Group:</strong>
+                <Select name="bloodGroup" value={form.bloodGroup} onValueChange={(value) => handleSelectChange('bloodGroup', value)}>
+                  <SelectTrigger className={errors.bloodGroup ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Select blood group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                      <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.bloodGroup && <p className="mt-1 text-sm text-red-500">{errors.bloodGroup}</p>}
+              </div>
+              <div className="flex flex-col">
                 <strong className="mb-1">Gender:</strong>
                 <Select name="gender" value={form.gender} onValueChange={(value) => handleSelectChange('gender', value)}>
                   <SelectTrigger className={errors.gender ? 'border-red-500' : ''}>
@@ -584,7 +615,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectItem value="Married">Married</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.maritalStatus && <p className="mt-1 text-sm text-red-500">{errors.maritalStatus}</p>}
+                {errors.maritalStatus && <p className="mt-1 text-sm text-red-500">{errors.martialStatus}</p>}
               </div>
               {form.maritalStatus === 'Married' && (
                 <div className="flex flex-col">
@@ -637,7 +668,7 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   </SelectTrigger>
                   <SelectContent>
                     {managers.map(m => (
-                      m._id && <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
+                      m._id && m._id !== employee._id && <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -650,36 +681,67 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Confirmed">Confirmed</SelectItem>
-                    <SelectItem value="Probation">Probation</SelectItem>
-                    <SelectItem value="Contractual">Contractual</SelectItem>
+                    <SelectItem value="Working">Working</SelectItem>
+                    <SelectItem value="Resigned">Resigned</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.status && <p className="mt-1 text-sm text-red-500">{errors.status}</p>}
               </div>
-              {form.status === 'Probation' && (
+              {form.status === 'Resigned' && (
+                <div className="flex flex-col">
+                  <strong className="mb-1">Date of Resigning:</strong>
+                  <Input
+                    name="dateOfResigning"
+                    type="date"
+                    value={form.dateOfResigning}
+                    onChange={handleChange}
+                    className={errors.dateOfResigning ? 'border-red-500' : ''}
+                  />
+                  {errors.dateOfResigning && <p className="mt-1 text-sm text-red-500">{errors.dateOfResigning}</p>}
+                </div>
+              )}
+              {form.status === 'Working' && (
                 <>
                   <div className="flex flex-col">
-                    <strong className="mb-1">Probation Period:</strong>
-                    <Input
-                      name="probationPeriod"
-                      value={form.probationPeriod}
-                      onChange={handleChange}
-                      className={errors.probationPeriod ? 'border-red-500' : ''}
-                    />
-                    {errors.probationPeriod && <p className="mt-1 text-sm text-red-500">{errors.probationPeriod}</p>}
+                    <strong className="mb-1">Employee Type:</strong>
+                    <Select name="employeeType" value={form.employeeType} onValueChange={(value) => handleSelectChange('employeeType', value)}>
+                      <SelectTrigger className={errors.employeeType ? 'border-red-500' : ''}>
+                        <SelectValue placeholder="Select employee type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Intern">Intern</SelectItem>
+                        <SelectItem value="Confirmed">Confirmed</SelectItem>
+                        <SelectItem value="Probation">Probation</SelectItem>
+                        <SelectItem value="Contractual">Contractual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.employeeType && <p className="mt-1 text-sm text-red-500">{errors.employeeType}</p>}
                   </div>
-                  <div className="flex flex-col">
-                    <strong className="mb-1">Confirmation Date:</strong>
-                    <Input
-                      name="confirmationDate"
-                      type="date"
-                      value={form.confirmationDate}
-                      onChange={handleChange}
-                      className={errors.confirmationDate ? 'border-red-500' : ''}
-                    />
-                    {errors.confirmationDate && <p className="mt-1 text-sm text-red-500">{errors.confirmationDate}</p>}
-                  </div>
+                  {form.employeeType === 'Probation' && (
+                    <>
+                      <div className="flex flex-col">
+                        <strong className="mb-1">Probation Period:</strong>
+                        <Input
+                          name="probationPeriod"
+                          value={form.probationPeriod}
+                          onChange={handleChange}
+                          className={errors.probationPeriod ? 'border-red-500' : ''}
+                        />
+                        {errors.probationPeriod && <p className="mt-1 text-sm text-red-500">{errors.probationPeriod}</p>}
+                      </div>
+                      <div className="flex flex-col">
+                        <strong className="mb-1">Confirmation Date:</strong>
+                        <Input
+                          name="confirmationDate"
+                          type="date"
+                          value={form.confirmationDate}
+                          onChange={handleChange}
+                          className={errors.confirmationDate ? 'border-red-500' : ''}
+                        />
+                        {errors.confirmationDate && <p className="mt-1 text-sm text-red-500">{errors.confirmationDate}</p>}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
               <div className="flex flex-col">
@@ -744,19 +806,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   </SelectContent>
                 </Select>
                 {errors.department && <p className="mt-1 text-sm text-red-500">{errors.department}</p>}
-              </div>
-              <div className="flex flex-col">
-                <strong className="mb-1">Employee Type:</strong>
-                <Select name="employeeType" value={form.employeeType} onValueChange={(value) => handleSelectChange('employeeType', value)}>
-                  <SelectTrigger className={errors.employeeType ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Select employee type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Intern">Intern</SelectItem>
-                    <SelectItem value="Staff">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.employeeType && <p className="mt-1 text-sm text-red-500">{errors.employeeType}</p>}
               </div>
             </div>
           )}

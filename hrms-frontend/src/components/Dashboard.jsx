@@ -12,6 +12,7 @@ function Dashboard() {
     confirmedEmployees: 0,
     probationEmployees: 0,
     contractualEmployees: 0,
+    internEmployees: 0,
     presentToday: 0,
     pendingLeaves: 0,
   });
@@ -129,47 +130,61 @@ function Dashboard() {
     <ContentLayout title="Dashboard">
       <div className="flex flex-col items-center w-full">
         {/* Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-6 w-full max-w-[1200px]">
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-blue-800 text-center">Confirmed</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-blue-600 text-center">{data.confirmedEmployees}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-purple-800 text-center">Probation</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-purple-600 text-center">{data.probationEmployees}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-pink-50 to-pink-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-pink-800 text-center">Contractual</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-pink-600 text-center">{data.contractualEmployees}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-green-800 text-center">Present Today</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-green-600 text-center">{data.presentToday}</p>
-            </CardContent>
-          </Card>
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-yellow-800 text-center">Pending Leaves</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-yellow-600 text-center">{data.pendingLeaves}</p>
-            </CardContent>
-          </Card>
+        <div className="flex flex-col items-center w-full max-w-[1200px]">
+          {/* First Row: Employee Category Cards */}
+          <div className="flex justify-center gap-20 w-full">
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-blue-800 text-center">Confirmed</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <p className="text-3xl font-bold text-blue-600 text-center">{data.confirmedEmployees}</p>
+              </CardContent>
+            </Card>
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-purple-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-purple-800 text-center">Probation</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <p className="text-3xl font-bold text-purple-600 text-center">{data.probationEmployees}</p>
+              </CardContent>
+            </Card>
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-pink-50 to-pink-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-pink-800 text-center">Contractual</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <p className="text-3xl font-bold text-pink-600 text-center">{data.contractualEmployees}</p>
+              </CardContent>
+            </Card>
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 to-indigo-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-indigo-800 text-center">Intern</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <p className="text-3xl font-bold text-indigo-600 text-center">{data.internEmployees}</p>
+              </CardContent>
+            </Card>
+          </div>
+          {/* Second Row: Present and Pending Leaves Cards */}
+          <div className="flex justify-center gap-20 w-full mt-6">
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-green-800 text-center">Present Today</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <p className="text-3xl font-bold text-green-600 text-center">{data.presentToday}</p>
+              </CardContent>
+            </Card>
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-yellow-800 text-center">Pending Leaves</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <p className="text-3xl font-bold text-yellow-600 text-center">{data.pendingLeaves}</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Graphs */}

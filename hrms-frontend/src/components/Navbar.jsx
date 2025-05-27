@@ -33,6 +33,7 @@ function Navbar() {
       { text: 'Dashboard', path: '/hod/dashboard' },
       { text: 'My Dashboard', path: '/hod/employee-dashboard' },
       { text: 'Employees', path: '/hod/employees' },
+      { text: 'Attendance', path: '/hod/attendance' },
       { text: 'Apply Leave', path: '/hod/leave' },
       { text: 'Approve Leave', path: '/hod/approve-leave' },
     ],

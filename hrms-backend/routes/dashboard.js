@@ -6,7 +6,7 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
 
-// Get dashboard statistics (existing endpoint)
+// Get dashboard statistics
 router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
   try {
     const { loginType, employeeId } = req.user;
@@ -28,7 +28,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
     tomorrow.setDate(today.getDate() + 1);
 
     // Employee status aggregation
-    const employeeMatch = departmentId ? { department: departmentId } : {};
+    const employeeMatch = departmentId ? { department: departmentId, status: 'Working' } : { status: 'Working' };
     const employeeStats = await Employee.aggregate([
       { $match: employeeMatch },
       {
@@ -37,13 +37,13 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
             $cond: {
               if: {
                 $and: [
-                  { $eq: ['$status', 'Probation'] },
+                  { $eq: ['$employeeType', 'Probation'] },
                   { $ne: ['$confirmationDate', null] },
                   { $lte: ['$confirmationDate', new Date()] },
                 ],
               },
               then: 'Confirmed',
-              else: '$status',
+              else: '$employeeType',
             },
           },
         },
@@ -60,9 +60,12 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       Confirmed: 0,
       Probation: 0,
       Contractual: 0,
+      Intern: 0,
     };
     employeeStats.forEach(stat => {
-      if (stat._id) employeeCounts[stat._id] = stat.count;
+      if (stat._id && ['Confirmed', 'Probation', 'Contractual', 'Intern'].includes(stat._id)) {
+        employeeCounts[stat._id] = stat.count;
+      }
     });
 
     // Present today aggregation
@@ -92,6 +95,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       confirmedEmployees: employeeCounts.Confirmed,
       probationEmployees: employeeCounts.Probation,
       contractualEmployees: employeeCounts.Contractual,
+      internEmployees: employeeCounts.Intern,
       presentToday,
       pendingLeaves,
     };
@@ -166,7 +170,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
 
     // Paid Leaves Remaining
     let paidLeavesRemaining = { monthly: 0, yearly: 0 };
-    if (employee.employeeType === 'Staff') {
+    if (employee.employeeType === 'Confirmed') {
       // For Staff: Calculate monthly and yearly remaining leaves
       const leavesThisMonth = await Leave.find({
         employeeId,
@@ -212,7 +216,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
         yearly: employee.paidLeaves - yearlyDays,
       };
     } else {
-      // For Interns: Only monthly
+      // For Interns, Contractual, Probation: Only monthly
       const leavesThisMonth = await Leave.find({
         employeeId,
         leaveType: 'Paid',
@@ -235,7 +239,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
 
       paidLeavesRemaining = {
         monthly: employee.paidLeaves - monthlyDays,
-        yearly: 0, // Not applicable for Interns
+        yearly: 0, // Not applicable for non-Confirmed
       };
     }
 

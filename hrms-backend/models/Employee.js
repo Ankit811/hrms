@@ -18,6 +18,7 @@ const employeeSchema = new mongoose.Schema({
   permanentAddress: String,
   currentAddress: String,
   aadharNumber: { type: String, match: /^\d{12}$/ },
+  bloodGroup: { type: String, enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
   gender: { type: String, enum: ['Male', 'Female', 'Other'] },
   maritalStatus: { type: String, enum: ['Single', 'Married'] },
   spouseName: { 
@@ -28,21 +29,29 @@ const employeeSchema = new mongoose.Schema({
   emergencyContactNumber: String,
   dateOfJoining: Date,
   reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
-  status: { type: String, enum: ['Confirmed', 'Probation', 'Contractual'] },
+  status: { type: String, enum: ['Working', 'Resigned'] },
+  dateOfResigning: { 
+    type: Date,
+    required: function() { return this.status === 'Resigned'; } 
+  },
+  employeeType: { 
+    type: String, 
+    enum: ['Intern', 'Confirmed', 'Contractual', 'Probation'],
+    required: function() { return this.status === 'Working'; }
+  },
   probationPeriod: { 
     type: Number,
-    required: function() { return this.status === 'Probation'; } 
+    required: function() { return this.status === 'Working' && this.employeeType === 'Probation'; } 
   },
   confirmationDate: { 
     type: Date,
-    required: function() { return this.status === 'Probation'; } 
+    required: function() { return this.status === 'Working' && this.employeeType === 'Probation'; } 
   },
   referredBy: String,
   loginType: { type: String, enum: ['Employee', 'HOD', 'Admin', 'CEO'] },
   designation: String,
   location: String,
   department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department' },
-  employeeType: { type: String, enum: ['Intern', 'Staff'] },
   panNumber: { type: String, match: /^[A-Z0-9]{10}$/ },
   pfNumber: { type: String, match: /^\d{18}$/, sparse: true },
   uanNumber: { type: String, match: /^\d{12}$/, sparse: true },
@@ -94,14 +103,14 @@ employeeSchema.pre('save', async function(next) {
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
 
-  if (this.employeeType === 'Staff') {
+  if (this.employeeType === 'Confirmed') {
     // Yearly reset for Staff
     const lastResetYear = this.lastLeaveReset ? new Date(this.lastLeaveReset).getFullYear() : null;
     if (!lastResetYear || lastResetYear < currentYear) {
       this.paidLeaves = 12; // Reset to 12 for the new year
       this.lastLeaveReset = new Date(currentYear, 0, 1); // Set reset date to Jan 1 of current year
     }
-  } else if (this.employeeType === 'Intern') {
+  } else if (this.employeeType === 'Intern' ||this.employeeType === 'Contractual' || this.employeeType === 'Probation') {
     // Monthly credit for Interns
     const lastResetMonth = this.lastMonthlyReset ? new Date(this.lastMonthlyReset).getMonth() : null;
     const lastResetYear = this.lastMonthlyReset ? new Date(this.lastMonthlyReset).getFullYear() : null;

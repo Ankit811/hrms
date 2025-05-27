@@ -6,6 +6,7 @@ import Pagination from './Pagination';
 function Attendance() {
   const [attendance, setAttendance] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [user, setUser] = useState(null);
   const [filters, setFilters] = useState({
     employeeId: '',
     departmentId: '',
@@ -18,9 +19,28 @@ function Attendance() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
+    fetchUser();
     fetchDepartments();
-    fetchAttendance();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (user && user.loginType === 'HOD' && user.department) {
+      setFilters((prev) => ({ ...prev, departmentId: user.department._id }));
+      fetchAttendance();
+    } else {
+      fetchAttendance();
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get('/auth/me'); // Assuming an endpoint to get logged-in user details
+      setUser(res.data);
+    } catch (err) {
+      console.error('Error fetching user:', err);
+      setError('Failed to load user data');
+    }
+  };
 
   const fetchDepartments = async () => {
     try {
@@ -97,6 +117,11 @@ function Attendance() {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
+  // Get department name for HOD
+  const hodDepartmentName = user?.loginType === 'HOD' && user?.department
+    ? departments.find(dep => dep._id === user.department._id)?.name || 'Unknown'
+    : '';
+
   return (
     <ContentLayout title="Attendance List">
       <div className="w-full max-w-6xl mx-auto">
@@ -110,17 +135,27 @@ function Attendance() {
             placeholder="Employee ID"
             className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
           />
-          <select
-            name="departmentId"
-            value={filters.departmentId}
-            onChange={handleChange}
-            className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
-          >
-            <option value="">All Departments</option>
-            {departments.map(dep => (
-              <option key={dep._id} value={dep._id}>{dep.name}</option>
-            ))}
-          </select>
+          {user?.loginType === 'HOD' ? (
+            <input
+              type="text"
+              value={hodDepartmentName}
+              readOnly
+              className="max-w-sm border border-border px-4 py-2 rounded-md bg-gray-100 text-foreground cursor-not-allowed"
+              placeholder="Your Department"
+            />
+          ) : (
+            <select
+              name="departmentId"
+              value={filters.departmentId}
+              onChange={handleChange}
+              className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
+            >
+              <option value="">All Departments</option>
+              {departments.map(dep => (
+                <option key={dep._id} value={dep._id}>{dep.name}</option>
+              ))}
+            </select>
+          )}
           <input
             type="date"
             name="fromDate"

@@ -1,4 +1,3 @@
-// routes/employees.js
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -22,7 +21,6 @@ function parseExcelDate(value) {
   }
   return new Date(value);
 }
-
 
 // Middleware to check gfs readiness
 const ensureGfs = (req, res, next) => {
@@ -201,10 +199,10 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
     console.log('Received files:', req.uploadedFiles);
     const {
       employeeId, userId, email, password, name, dateOfBirth, fatherName, motherName,
-      mobileNumber, permanentAddress, currentAddress, aadharNumber, gender, maritalStatus,
+      mobileNumber, permanentAddress, currentAddress, aadharNumber, bloodGroup, gender, maritalStatus,
       spouseName, emergencyContactName, emergencyContactNumber, dateOfJoining, reportingManager,
-      status, probationPeriod, confirmationDate, referredBy, loginType,
-      designation, location, department, employeeType, panNumber, pfNumber,
+      status, dateOfResigning, employeeType, probationPeriod, confirmationDate, referredBy, loginType,
+      designation, location, department, panNumber, pfNumber,
       uanNumber, esiNumber, paymentType, bankName, bankBranch, accountNumber, ifscCode
     } = req.body;
 
@@ -212,9 +210,9 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
     const requiredFields = [
       'employeeId', 'userId', 'email', 'password', 'name', 'dateOfBirth', 'fatherName',
       'motherName', 'mobileNumber', 'permanentAddress', 'currentAddress', 'aadharNumber',
-      'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber',
+      'bloodGroup', 'gender', 'maritalStatus', 'emergencyContactName', 'emergencyContactNumber',
       'dateOfJoining', 'reportingManager', 'status', 'loginType', 'designation',
-      'location', 'department', 'employeeType', 'panNumber', 'paymentType'
+      'location', 'department', 'panNumber', 'paymentType'
     ];
     for (const field of requiredFields) {
       if (!req.body[field] || req.body[field].trim() === '') {
@@ -227,8 +225,16 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
       return res.status(400).json({ message: 'Spouse name is required for married employees' });
     }
 
-    if (status === 'Probation' && (!probationPeriod || !confirmationDate)) {
-      return res.status(400).json({ message: 'Probation period and confirmation date are required for probation status' });
+    if (status === 'Resigned' && (!dateOfResigning || dateOfResigning.trim() === '')) {
+      return res.status(400).json({ message: 'Date of Resigning is required for Resigned status' });
+    }
+
+    if (status === 'Working' && (!employeeType || employeeType.trim() === '')) {
+      return res.status(400).json({ message: 'Employee Type is required for Working status' });
+    }
+
+    if (status === 'Working' && employeeType === 'Probation' && (!probationPeriod || !confirmationDate)) {
+      return res.status(400).json({ message: 'Probation period and confirmation date are required for Probation employee type' });
     }
 
     if (paymentType === 'Bank Transfer' && (!bankName || !bankBranch || !accountNumber || !ifscCode)) {
@@ -255,6 +261,10 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
     }
     if (esiNumber && !/^\d{12}$/.test(esiNumber)) {
       return res.status(400).json({ message: 'ESI Number must be 12 digits' });
+    }
+
+    if (!['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(bloodGroup)) {
+      return res.status(400).json({ message: 'Invalid blood group' });
     }
 
     const departmentExists = await Department.findById(department);
@@ -294,6 +304,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
       permanentAddress,
       currentAddress,
       aadharNumber,
+      bloodGroup,
       gender,
       maritalStatus,
       spouseName,
@@ -302,14 +313,15 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
       dateOfJoining: new Date(dateOfJoining),
       reportingManager,
       status,
-      probationPeriod: status === 'Probation' ? probationPeriod : null,
-      confirmationDate: status === 'Probation' ? new Date(confirmationDate) : null,
+      dateOfResigning: status === 'Resigned' ? new Date(dateOfResigning) : null,
+      employeeType: status === 'Working' ? employeeType : null,
+      probationPeriod: status === 'Working' && employeeType === 'Probation' ? probationPeriod : null,
+      confirmationDate: status === 'Working' && employeeType === 'Probation' ? new Date(confirmationDate) : null,
       referredBy,
       loginType,
       designation,
       location,
       department,
-      employeeType,
       panNumber,
       pfNumber,
       uanNumber,
@@ -384,11 +396,11 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     const basicInfoFields = [
       'employeeId', 'userId', 'email', 'password', 'name', 'dateOfBirth', 'fatherName',
       'motherName', 'mobileNumber', 'permanentAddress', 'currentAddress', 'aadharNumber',
-      'gender', 'maritalStatus', 'spouseName', 'emergencyContactName', 'emergencyContactNumber',
-      'dateOfJoining', 'reportingManager', 'status', 'probationPeriod', 'confirmationDate',
+      'bloodGroup', 'gender', 'maritalStatus', 'spouseName', 'emergencyContactName', 'emergencyContactNumber',
+      'dateOfJoining', 'reportingManager', 'status', 'dateOfResigning', 'employeeType', 'probationPeriod', 'confirmationDate',
       'referredBy', 'loginType'
     ];
-    const positionFields = ['designation', 'location', 'department', 'employeeType'];
+    const positionFields = ['designation', 'location', 'department'];
     const statutoryFields = ['panNumber', 'pfNumber', 'uanNumber', 'esiNumber'];
     const documentFields = [
       'tenthTwelfthDocs', 'graduationDocs', 'postgraduationDocs', 'experienceCertificate',
@@ -427,16 +439,30 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     }
     if (updates.reportingManager) {
       const reportingManagerExists = await Employee.findById(updates.reportingManager);
-      if (!reportingManagerExists) return res.status(400).json({ message: 'Invalid reporting manager' });
+      if (!reportingManagerExists) {
+        return res.status(400).json({ message: 'Invalid reporting manager' });
+      }
     }
     if (updates.aadharNumber && !/^\d{12}$/.test(updates.aadharNumber)) {
       return res.status(400).json({ message: 'Aadhar Number must be exactly 12 digits' });
     }
+    if (updates.bloodGroup && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(updates.bloodGroup)) {
+      return res.status(400).json({ message: 'Invalid blood group' });
+    }
     if (updates.mobileNumber && !/^\d{10}$/.test(updates.mobileNumber)) {
-      return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits' });
+      return res.status(400).json({ message: 'Mobile Number must be 10 digits' });
     }
     if (updates.password && updates.password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    if (updates.status === 'Resigned' && !updates.dateOfResigning) {
+      return res.status(400).json({ message: 'Date of Resigning is required for Resigned status' });
+    }
+    if (updates.status === 'Working' && !updates.employeeType) {
+      return res.status(400).json({ message: 'Employee Type is required for Working status' });
+    }
+    if (updates.status === 'Working' && updates.employeeType === 'Probation' && (!updates.probationPeriod || !updates.confirmationDate)) {
+      return res.status(400).json({ message: 'Probation period and confirmation date are required for Probation' });
     }
     if (updates.panNumber && !/^[A-Z0-9]{10}$/.test(updates.panNumber)) {
       return res.status(400).json({ message: 'PAN Number must be 10 alphanumeric characters' });
@@ -452,6 +478,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     }
     if (updates.dateOfBirth) updates.dateOfBirth = new Date(updates.dateOfBirth);
     if (updates.dateOfJoining) updates.dateOfJoining = new Date(updates.dateOfJoining);
+    if (updates.dateOfResigning) updates.dateOfResigning = new Date(updates.dateOfResigning);
     if (updates.confirmationDate) updates.confirmationDate = new Date(updates.confirmationDate);
     if (updates.paymentType === 'Bank Transfer' && (!updates.bankName || !updates.bankBranch || !updates.accountNumber || !updates.ifscCode)) {
       return res.status(400).json({ message: 'Bank details are required for bank transfer payment type' });
@@ -517,12 +544,14 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
 
     const updatedEmployee = await employee.save();
     const populatedEmployee = await Employee.findById(employee._id).populate('department reportingManager');
-    console.log('Employee updated:', updatedEmployee.employeeId);
+    console.log('employee updated successfully:', updatedEmployee.employeeId);
 
     try {
       await Audit.create({
-        action: 'update_employee',
+        type: 'update_employee',
+        action: 'update',
         user: req.user?.id || 'unknown',
+        dept: 'HR',
         details: `Updated employee ${employee.employeeId}`
       });
     } catch (auditErr) {
@@ -716,6 +745,18 @@ router.post(
             if (row.esiNumber && !/^\d{12}$/.test(row.esiNumber)) {
               throw new Error('ESI Number must be 12 digits');
             }
+            if (row.bloodGroup && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(row.bloodGroup)) {
+              throw new Error('Invalid blood group');
+            }
+            if (row.status === 'Resigned' && !row.dateOfResigning) {
+              throw new Error('Date of Resigning is required for Resigned status');
+            }
+            if (row.status === 'Working' && !row.employeeType) {
+              throw new Error('Employee Type is required for Working status');
+            }
+            if (row.status === 'Working' && row.employeeType === 'Probation' && (!row.probationPeriod || !row.confirmationDate)) {
+              throw new Error('Probation period and confirmation date are required for Probation employee type');
+            }
 
             // Department population if department is provided
             let departmentId = null;
@@ -745,33 +786,35 @@ router.post(
               email: row.email || '',
               password: row.password || Math.random().toString(36).slice(-8),
               aadharNumber: row.aadharNumber || '',
+              bloodGroup: row.bloodGroup || '',
               gender: row.gender || '',
               maritalStatus: row.maritalStatus || '',
               spouseName: row.spouseName || '',
               emergencyContactName: row.emergencyContactName || '',
               emergencyContactNumber: row.emergencyContactNumber || '',
               dateOfJoining: parseExcelDate(row.dateOfJoining),
+              dateOfResigning: row.status === 'Resigned' ? parseExcelDate(row.dateOfResigning) : null,
+              employeeType: row.status === 'Working' ? row.employeeType : null,
+              probationPeriod: row.status === 'Working' && row.employeeType === 'Probation' ? row.probationPeriod : null,
+              confirmationDate: row.status === 'Working' && row.employeeType === 'Probation' ? parseExcelDate(row.dateOfConfirmationDate) : null,
               reportingManager: reportingManagerId,
               status: row.status || '',
-              probationPeriod: row.probationPeriod || '',
-              confirmationDate: row.confirmationDate ? new Date(row.confirmationDate) : undefined,
               referredBy: row.referredBy || '',
               loginType: row.loginType || '',
               designation: row.designation || '',
               location: row.location || '',
               department: departmentId,
-              employeeType: row.employeeType || '',
               panNumber: row.panNumber || '',
               pfNumber: row.pfNumber || '',
               uanNumber: row.uanNumber || '',
               esiNumber: row.esiNumber || '',
               paymentType: row.paymentType || '',
-              bankDetails: {
+              bankDetails: row.paymentType === 'Bank Transfer' ? {
                 bankName: row.bankName || '',
                 bankBranch: row.bankBranch || '',
                 accountNumber: row.accountNumber || '',
                 ifscCode: row.ifscCode || '',
-              },
+              } : null,
               // Lock all sections except document upload (which stays locked)
               locked: true,
               basicInfoLocked: true,

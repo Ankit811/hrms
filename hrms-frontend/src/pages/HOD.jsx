@@ -6,6 +6,7 @@ import Profile from '../components/Profile';
 import EmployeeList from '../components/EmployeeList';
 import LeaveForm from '../components/LeaveForm';
 import LeaveList from '../components/LeaveList';
+import Attendance from '../components/Attendance';
 import MyDashboard from '../components/EmployeeDashboard'
 
 function HOD() {
@@ -20,6 +21,7 @@ function HOD() {
           <Route path="employees" element={<EmployeeList />} />
           <Route path="leave" element={<LeaveForm />} />
           <Route path="approve-leave" element={<LeaveList />} />
+          <Route path="attendance" element={<Attendance />} />
         </Routes>
       </div>
     </div>

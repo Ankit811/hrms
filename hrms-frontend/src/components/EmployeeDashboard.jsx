@@ -87,7 +87,7 @@ function EmployeeDashboard() {
     <ContentLayout title="My Dashboard">
       <div className="flex flex-col items-center w-full">
         {/* Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-[1200px]">
+        <div className="flex items-center justify-around gap-6 w-full">
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
             <CardHeader className="p-2">
               <CardTitle className="text-lg font-semibold text-blue-800 text-center">
