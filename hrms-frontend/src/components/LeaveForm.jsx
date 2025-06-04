@@ -38,7 +38,7 @@ function LeaveForm() {
   useEffect(() => {
     const fetchCompensatoryBalance = async () => {
       try {
-        const res = await api.get('/dashboard/employee/info');
+        const res = await api.get('/dashboard/employee-info');
         setCompensatoryBalance(res.data.compensatoryLeaves || 0);
       } catch (err) {
         console.error('Error fetching compensatory balance:', err);
@@ -251,7 +251,7 @@ function LeaveForm() {
             {form.leaveType === 'Compensatory' && (
               <>
                 <div className="col-span-2">
-                  <Label for="compensatoryBalance">Compensatory Leave Balance</Label>
+                  <Label htmlFor="compensatoryBalance">Compensatory Leave Balance</Label>
                   <p className="mt-1 text-sm text-gray-600">{compensatoryBalance} hours</p>
                 </div>
                 <div className="col-span-2">

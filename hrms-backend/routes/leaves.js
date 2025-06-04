@@ -199,7 +199,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
     await Audit.create({ user: user.employeeId, action: 'Submit Leave', details: 'Submitted leave request' });
 
-    res.status(leave).json(201);
+    res.status(201).json(leave);
   } catch (err) {
     console.error('Leave submit error:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
