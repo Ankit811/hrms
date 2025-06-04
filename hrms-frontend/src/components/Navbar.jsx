@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useContext } from 'react';
+import React, { useEffect, useRef, useContext, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Transition } from '@headlessui/react';
@@ -6,6 +6,7 @@ import Notification from './Notification';
 import { AuthContext } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 import io from 'socket.io-client';
+import OTForm from './OTForm';
 import { Menu as MenuIcon } from 'lucide-react';
 
 function Navbar() {
@@ -13,6 +14,7 @@ function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const socketRef = useRef(null);
+  const [otFormOpen, setOTFormOpen ] = useState(false);
 
   const menuItems = {
     Admin: [
@@ -23,11 +25,14 @@ function Navbar() {
       { text: 'Attendance', path: '/admin/attendance' },
       { text: 'Apply Leave', path: '/admin/leave' },
       { text: 'Approve Leave', path: '/admin/approve-leave' },
+      { text: 'Apply OT', action: () => setOTFormOpen(true) },
+      { text: 'Approve OT', path: '/admin/approve-ot' },
     ],
     CEO: [
       { text: 'Dashboard', path: '/ceo/dashboard' },
       { text: 'Employees', path: '/ceo/employees' },
       { text: 'Approve Leaves', path: '/ceo/approve-leaves' },
+      { text: 'Approve OT', path: '/ceo/approve-otapprove', },
     ],
     HOD: [
       { text: 'Dashboard', path: '/hod/dashboard' },
@@ -36,10 +41,13 @@ function Navbar() {
       { text: 'Attendance', path: '/hod/attendance' },
       { text: 'Apply Leave', path: '/hod/leave' },
       { text: 'Approve Leave', path: '/hod/approve-leave' },
+      { text: 'Apply OT', action: () => setOTFormOpen(true) },
+      { text: 'Approve OT', path: '/hod/approve-ot' },
     ],
     Employee: [
       { text: 'My Dashboard', path: '/employee/employee-dashboard' },
       { text: 'Apply Leave', path: '/employee/leave' },
+      { text: 'Apply OT', action: () => setOTFormOpen(true) },
     ],
   };
 
@@ -111,48 +119,92 @@ function Navbar() {
   }
 
   return (
-    <motion.header
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ type: 'spring', stiffness: 120 }}
-      className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 rounded-md"
-    >
-      <div className="flex items-center justify-between h-full px-4 md:px-6">
-        {/* Left Section: Logo and Tabs */}
-        <div className="flex items-center space-x-4">
-          <motion.img
-            src={logo}
-            alt="Company Logo"
-            className="h-12 cursor-pointer"
-            whileHover={{ scale: 1.05 }}
-            onClick={handleLogoClick}
-          />
+    <>
+      <motion.header
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 120 }}
+        className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 rounded-md"
+      >
+        <div className="flex items-center justify-between h-full px-4 md:px-6">
+          {/* Left Section: Logo and Tabs */}
+          <div className="flex items-center space-x-4">
+            <motion.img
+              src={logo}
+              alt="Company Logo"
+              className="h-12 cursor-pointer"
+              whileHover={{ scale: 1.05 }}
+              onClick={handleLogoClick}
+            />
 
-          {user && (
-            <nav className="hidden md:flex items-center space-x-2">
-              {menuItems[user.loginType]?.map((item, index) => (
-                <motion.div
-                  key={index}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 ${
-                    location.pathname === item.path
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                  onClick={() => handleNavigation(item.path)}
-                >
-                  {item.text}
-                </motion.div>
-              ))}
-            </nav>
-          )}
+            {user && (
+              <nav className="hidden md:flex items-center space-x-2">
+                {menuItems[user.loginType]?.map((item, index) => (
+                  <motion.div
+                    key={index}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 ${
+                      location.pathname === item.path
+                        ? 'bg-muted text-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                    onClick={() => handleNavigation(item.path)}
+                  >
+                    {item.text}
+                  </motion.div>
+                ))}
+              </nav>
+            )}
 
-          {user && (
-            <div className="md:hidden">
+            {user && (
+              <div className="md:hidden">
+                <Menu as="div" className="relative inline-block text-left">
+                  <Menu.Button as={motion.div} whileHover={{ scale: 1.1 }} className="text-muted-foreground hover:text-foreground cursor-pointer">
+                    <MenuIcon className="h-6 w-6" />
+                  </Menu.Button>
+                  <Transition
+                    as={React.Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
+                  >
+                    <Menu.Items className="absolute left-0 mt-2 w-56 origin-top-left bg-popover rounded-lg shadow-xl p-2 z-50">
+                      {menuItems[user.loginType]?.map((item, index) => (
+                        <Menu.Item key={index}>
+                          {({ active }) => (
+                            <div
+                              className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
+                                location.pathname === item.path
+                                  ? 'bg-muted font-semibold text-foreground'
+                                  : active
+                                  ? 'bg-muted text-foreground'
+                                  : 'text-foreground'
+                              }`}
+                              onClick={() => handleNavigation(item.path)}
+                            >
+                              {item.text}
+                            </div>
+                          )}
+                        </Menu.Item>
+                      ))}
+                    </Menu.Items>
+                  </Transition>
+                </Menu>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-4">
+            <Notification />
+
+            {user ? (
               <Menu as="div" className="relative inline-block text-left">
-                <Menu.Button as={motion.div} whileHover={{ scale: 1.1 }} className="text-muted-foreground hover:text-foreground cursor-pointer">
-                  <MenuIcon className="h-6 w-6" />
+                <Menu.Button as={motion.div} whileHover={{ scale: 1.1 }} className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg cursor-pointer shadow-md">
+                  {userInitial}
                 </Menu.Button>
                 <Transition
                   as={React.Fragment}
@@ -163,87 +215,46 @@ function Navbar() {
                   leaveFrom="transform opacity-100 scale-100"
                   leaveTo="transform opacity-0 scale-95"
                 >
-                  <Menu.Items className="absolute left-0 mt-2 w-56 origin-top-left bg-popover rounded-lg shadow-xl p-2 z-50">
-                    {menuItems[user.loginType]?.map((item, index) => (
-                      <Menu.Item key={index}>
-                        {({ active }) => (
-                          <div
-                            className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
-                              location.pathname === item.path
-                                ? 'bg-muted font-semibold text-foreground'
-                                : active
-                                ? 'bg-muted text-foreground'
-                                : 'text-foreground'
-                            }`}
-                            onClick={() => handleNavigation(item.path)}
-                          >
-                            {item.text}
-                          </div>
-                        )}
-                      </Menu.Item>
-                    ))}
+                  <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50 border">
+                    <div className="px-4 py-2 border-b border-border">
+                      <p className="text-sm font-medium text-foreground">{user.name || 'Guest'}</p>
+                      <p className="text-xs text-muted-foreground">{user.email || 'No email'}</p>
+                    </div>
+                    <Menu.Item>
+                      {({ active }) => (
+                        <div
+                          className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
+                            active ? 'bg-primary text-primary-foreground' : ''
+                          }`}
+                          onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}
+                        >
+                          Profile
+                        </div>
+                      )}
+                    </Menu.Item>
+                    <Menu.Item>
+                      {({ active }) => (
+                        <div
+                          className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
+                            active ? 'bg-destructive text-destructive-foreground' : ''
+                          }`}
+                          onClick={handleLogout}
+                        >
+                          Logout
+                        </div>
+                      )}
+                    </Menu.Item>
                   </Menu.Items>
                 </Transition>
               </Menu>
-            </div>
-          )}
+            ) : (
+              <span className="text-foreground font-medium">Guest</span>
+            )}
+          </div>
         </div>
-
-        <div className="flex items-center space-x-4">
-          <Notification />
-
-          {user ? (
-            <Menu as="div" className="relative inline-block text-left">
-              <Menu.Button as={motion.div} whileHover={{ scale: 1.1 }} className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg cursor-pointer shadow-md">
-                {userInitial}
-              </Menu.Button>
-              <Transition
-                as={React.Fragment}
-                enter="transition ease-out duration-100"
-                enterFrom="transform opacity-0 scale-95"
-                enterTo="transform opacity-100 scale-100"
-                leave="transition ease-in duration-75"
-                leaveFrom="transform opacity-100 scale-100"
-                leaveTo="transform opacity-0 scale-95"
-              >
-                <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50 border">
-                  <div className="px-4 py-2 border-b border-border">
-                    <p className="text-sm font-medium text-foreground">{user.name || 'Guest'}</p>
-                    <p className="text-xs text-muted-foreground">{user.email || 'No email'}</p>
-                  </div>
-                  <Menu.Item>
-                    {({ active }) => (
-                      <div
-                        className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
-                          active ? 'bg-primary text-primary-foreground' : ''
-                        }`}
-                        onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}
-                      >
-                        Profile
-                      </div>
-                    )}
-                  </Menu.Item>
-                  <Menu.Item>
-                    {({ active }) => (
-                      <div
-                        className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
-                          active ? 'bg-destructive text-destructive-foreground' : ''
-                        }`}
-                        onClick={handleLogout}
-                      >
-                        Logout
-                      </div>
-                    )}
-                  </Menu.Item>
-                </Menu.Items>
-              </Transition>
-            </Menu>
-          ) : (
-            <span className="text-foreground font-medium">Guest</span>
-          )}
-        </div>
-      </div>
-    </motion.header>
+      </motion.header>
+      <OTForm open={otFormOpen} onOpenChange={setOTFormOpen} />
+    </>
   );
 }
 

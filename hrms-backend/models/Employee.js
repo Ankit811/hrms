@@ -83,10 +83,18 @@ const employeeSchema = new mongoose.Schema({
   statutoryLocked: { type: Boolean, default: true },
   documentsLocked: { type: Boolean, default: true },
   paymentLocked: { type: Boolean, default: true },
-  paidLeaves: { type: Number, default: 12 },
+  paidLeaves: { type: Number, default: 0 }, // Tracks Casual leaves only
+  medicalLeaves: { type: Number, default: 7 }, // Tracks Medical leaves (7 per year)
+  maternityClaims: { type: Number, default: 0 }, // Tracks Maternity leave claims (max 2)
+  paternityClaims: { type: Number, default: 0 }, // Tracks Paternity leave claims (max 2)
+  restrictedHolidays: { type: Number, default: 1 }, // Tracks Restricted Holiday (1 per year)
   unpaidLeavesTaken: { type: Number, default: 0 },
-  lastLeaveReset: { type: Date }, // For yearly reset (Staff)
-  lastMonthlyReset: { type: Date }, // For monthly credit (Interns)
+  compensatoryLeaves: { type: Number, default: 0 }, // Tracks compensatory leave hours
+  lastCompensatoryReset: { type: Date }, // Tracks last reset for expiration
+  lastLeaveReset: { type: Date }, // For Casual leaves (Confirmed)
+  lastMonthlyReset: { type: Date }, // For Casual leaves (Non-Confirmed)
+  lastMedicalReset: { type: Date }, // For Medical leaves
+  lastRestrictedHolidayReset: { type: Date }, // For Restricted Holiday
 }, { timestamps: true });
 
 // Middleware to handle password hashing
@@ -103,15 +111,47 @@ employeeSchema.pre('save', async function(next) {
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
 
+  // Initialize reset dates and leaves for new employees
+  if (this.isNew) {
+    if (this.employeeType === 'Confirmed') {
+      const joinDate = new Date(this.dateOfJoining);
+      const joinMonth = joinDate.getMonth(); // 0 = January, 11 = December
+      this.paidLeaves = 12 - joinMonth; // Casual leaves: E.g., join in March (month 2) -> 12 - 2 = 10
+      this.lastLeaveReset = new Date(currentYear, 0, 1);
+    } else if (['Intern', 'Contractual', 'Probation'].includes(this.employeeType)) {
+      this.paidLeaves = 1; // Casual leaves: Start with 1 leave for the current month
+      this.lastMonthlyReset = new Date(currentYear, currentMonth, 1);
+    }
+    // Initialize other paid leaves
+    this.medicalLeaves = 7;
+    this.restrictedHolidays = 1;
+    this.lastMedicalReset = new Date(currentYear, 0, 1);
+    this.lastRestrictedHolidayReset = new Date(currentYear, 0, 1);
+    this.maternityClaims = 0;
+    this.paternityClaims = 0;
+    this.compensatoryLeaves = 0;
+    this.lastCompensatoryReset = new Date(currentYear, currentMonth, 1);
+  }
+
+  // Handle compensatory leave expiration (6 months)
+  const lastReset = this.lastCompensatoryReset ? new Date(this.lastCompensatoryReset) : null;
+  if (lastReset) {
+    const sixMonthsLater = new Date(lastReset);
+    sixMonthsLater.setMonth(lastReset.getMonth() + 6);
+    if (today >= sixMonthsLater) {
+      this.compensatoryLeaves = 0; // Reset compensatory leaves after 6 months
+      this.lastCompensatoryReset = new Date(currentYear, currentMonth, 1);
+    }
+  }
+
+  // Handle Casual leave resets
   if (this.employeeType === 'Confirmed') {
-    // Yearly reset for Staff
     const lastResetYear = this.lastLeaveReset ? new Date(this.lastLeaveReset).getFullYear() : null;
     if (!lastResetYear || lastResetYear < currentYear) {
-      this.paidLeaves = 12; // Reset to 12 for the new year
-      this.lastLeaveReset = new Date(currentYear, 0, 1); // Set reset date to Jan 1 of current year
+      this.paidLeaves = 12; // Reset Casual leaves to 12 for new year
+      this.lastLeaveReset = new Date(currentYear, 0, 1);
     }
-  } else if (this.employeeType === 'Intern' ||this.employeeType === 'Contractual' || this.employeeType === 'Probation') {
-    // Monthly credit for Interns
+  } else if (['Intern', 'Contractual', 'Probation'].includes(this.employeeType)) {
     const lastResetMonth = this.lastMonthlyReset ? new Date(this.lastMonthlyReset).getMonth() : null;
     const lastResetYear = this.lastMonthlyReset ? new Date(this.lastMonthlyReset).getFullYear() : null;
     if (
@@ -119,11 +159,25 @@ employeeSchema.pre('save', async function(next) {
       lastResetYear < currentYear ||
       (lastResetYear === currentYear && lastResetMonth < currentMonth)
     ) {
-      // Carry forward existing leaves and add 1 for the new month
-      this.paidLeaves = (this.paidLeaves || 0) + 1;
-      this.lastMonthlyReset = new Date(currentYear, currentMonth, 1); // Set reset date to 1st of current month
+      this.paidLeaves = (this.paidLeaves || 0) + 1; // Add 1 Casual leave, carry forward
+      this.lastMonthlyReset = new Date(currentYear, currentMonth, 1);
     }
   }
+
+  // Handle Medical leave reset
+  const lastMedicalResetYear = this.lastMedicalReset ? new Date(this.lastMedicalReset).getFullYear() : null;
+  if (!lastMedicalResetYear || lastMedicalResetYear < currentYear) {
+    this.medicalLeaves = 7; // Reset Medical leaves to 7 for new year
+    this.lastMedicalReset = new Date(currentYear, 0, 1);
+  }
+
+  // Handle Restricted Holiday reset
+  const lastRestrictedResetYear = this.lastRestrictedHolidayReset ? new Date(this.lastRestrictedHolidayReset).getFullYear() : null;
+  if (!lastRestrictedResetYear || lastRestrictedResetYear < currentYear) {
+    this.restrictedHolidays = 1; // Reset Restricted Holiday to 1 for new year
+    this.lastRestrictedHolidayReset = new Date(currentYear, 0, 1);
+  }
+
   next();
 });
 
@@ -134,78 +188,107 @@ employeeSchema.methods.comparePassword = async function(password) {
 
 // Method to check for three consecutive paid leaves
 employeeSchema.methods.checkConsecutivePaidLeaves = async function(newLeaveStart, newLeaveEnd) {
+  const normalizeDate = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  newLeaveStart = normalizeDate(newLeaveStart);
+  newLeaveEnd = normalizeDate(newLeaveEnd);
+
+  const newLeaveDays = newLeaveStart.getTime() === newLeaveEnd.getTime() ? 0.5 : ((newLeaveEnd - newLeaveStart) / (1000 * 60 * 60 * 24)) + 1;
+  if (newLeaveDays > 3) {
+    return false; // No paid leaves allowed for more than 3 consecutive days
+  }
+
   const leaves = await Leave.find({
     employeeId: this.employeeId,
-    leaveType: 'Paid',
-    $or: [
-      { 'fullDay.from': { $lte: newLeaveEnd } },
-      { 'halfDay.date': { $lte: newLeaveEnd } },
-    ],
+    leaveType: { $in: ['Casual', 'Medical', 'Maternity', 'Paternity', 'Restricted Holidays'] }, // All paid leave types
     'status.hod': 'Approved',
     'status.admin': 'Approved',
     'status.ceo': 'Approved',
+    $or: [
+      {
+        'fullDay.from': { $lte: newLeaveEnd },
+        'fullDay.to': { $gte: newLeaveStart },
+      },
+      {
+        'halfDay.date': { $gte: newLeaveStart, $lte: newLeaveEnd },
+      },
+    ],
   });
 
-  // Convert leave dates to an array of covered dates
-  let leaveDates = [];
+  let totalDays = newLeaveDays;
   for (const leave of leaves) {
     if (leave.halfDay?.date) {
-      leaveDates.push(new Date(leave.halfDay.date).toISOString().split('T')[0]);
+      totalDays += 0.5;
     } else if (leave.fullDay?.from && leave.fullDay?.to) {
-      let currentDate = new Date(leave.fullDay.from);
-      const toDate = new Date(leave.fullDay.to);
-      while (currentDate <= toDate) {
-        leaveDates.push(currentDate.toISOString().split('T')[0]);
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+      const from = normalizeDate(leave.fullDay.from);
+      const to = normalizeDate(leave.fullDay.to);
+      totalDays += ((to - from) / (1000 * 60 * 60 * 24)) + 1;
     }
   }
 
-  // Add the new leave dates
-  let newLeaveDates = [];
-  if (newLeaveStart && newLeaveEnd) {
-    let currentDate = new Date(newLeaveStart);
-    const toDate = new Date(newLeaveEnd);
-    while (currentDate <= toDate) {
-      newLeaveDates.push(currentDate.toISOString().split('T')[0]);
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-  }
-
-  // Combine and sort all leave dates
-  leaveDates = [...new Set([...leaveDates, ...newLeaveDates])].sort();
-
-  // Check for three consecutive days
-  for (let i = 0; i < leaveDates.length - 2; i++) {
-    const date1 = new Date(leaveDates[i]);
-    const date2 = new Date(leaveDates[i + 1]);
-    const date3 = new Date(leaveDates[i + 2]);
-
-    const diff1 = (date2 - date1) / (1000 * 60 * 60 * 24);
-    const diff2 = (date3 - date2) / (1000 * 60 * 60 * 24);
-
-    if (diff1 === 1 && diff2 === 1) {
-      return false; // Three consecutive days found
-    }
-  }
-
-  return true; // No three consecutive days
+  return totalDays <= 3;
 };
 
-// Method to deduct paid leaves after a leave is approved
+// Method to deduct paid leaves (Casual only)
 employeeSchema.methods.deductPaidLeaves = async function(leaveStart, leaveEnd) {
   if (!leaveStart || !leaveEnd) return;
 
+  const normalizeDate = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  leaveStart = normalizeDate(leaveStart);
+  leaveEnd = normalizeDate(leaveEnd);
+
   let days = 0;
-  if (leaveStart.toISOString().split('T')[0] === leaveEnd.toISOString().split('T')[0]) {
-    days = 0.5; // Half-day leave
+  if (leaveStart.getTime() === leaveEnd.getTime()) {
+    days = 0.5;
   } else {
-    const from = new Date(leaveStart);
-    const to = new Date(leaveEnd);
-    days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+    days = ((leaveEnd - leaveStart) / (1000 * 60 * 60 * 24)) + 1;
   }
 
+  console.log(`Deducting ${days} days for Casual leave from ${leaveStart.toISOString()} to ${leaveEnd.toISOString()} for employee ${this.employeeId}`);
+
   this.paidLeaves = Math.max(0, this.paidLeaves - days);
+  await this.save();
+};
+
+// Method to deduct medical leaves
+employeeSchema.methods.deductMedicalLeaves = async function(days) {
+  this.medicalLeaves = Math.max(0, this.medicalLeaves - days);
+  await this.save();
+};
+
+// Method to deduct restricted holidays
+employeeSchema.methods.deductRestrictedHolidays = async function() {
+  this.restrictedHolidays = Math.max(0, this.restrictedHolidays - 1);
+  await this.save();
+};
+
+// Method to deduct compensatory leaves
+employeeSchema.methods.deductCompensatoryLeaves = async function(hours) {
+  if (this.compensatoryLeaves < hours) {
+    throw new Error('Insufficient compensatory leave balance');
+  }
+  this.compensatoryLeaves = Math.max(0, this.compensatoryLeaves - hours);
+  await this.save();
+};
+
+// Method to record maternity leave claim
+employeeSchema.methods.recordMaternityClaim = async function() {
+  this.maternityClaims = (this.maternityClaims || 0) + 1;
+  await this.save();
+};
+
+// Method to record paternity leave claim
+employeeSchema.methods.recordPaternityClaim = async function() {
+  this.paternityClaims = (this.paternityClaims || 0) + 1;
   await this.save();
 };
 
@@ -213,13 +296,20 @@ employeeSchema.methods.deductPaidLeaves = async function(leaveStart, leaveEnd) {
 employeeSchema.methods.incrementUnpaidLeaves = async function(leaveStart, leaveEnd) {
   if (!leaveStart || !leaveEnd) return;
 
+  const normalizeDate = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  leaveStart = normalizeDate(leaveStart);
+  leaveEnd = normalizeDate(leaveEnd);
+
   let days = 0;
-  if (leaveStart.toISOString().split('T')[0] === leaveEnd.toISOString().split('T')[0]) {
-    days = 0.5; // Half-day leave
+  if (leaveStart.getTime() === leaveEnd.getTime()) {
+    days = 0.5;
   } else {
-    const from = new Date(leaveStart);
-    const to = new Date(leaveEnd);
-    days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+    days = ((leaveEnd - leaveStart) / (1000 * 60 * 60 * 24)) + 1;
   }
 
   this.unpaidLeavesTaken = (this.unpaidLeavesTaken || 0) + days;

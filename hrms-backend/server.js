@@ -56,6 +56,7 @@ const departmentRoutes = require('./routes/departments');
 const attendanceRoutes = require('./routes/attendance');
 const leaveRoutes = require('./routes/leaves');
 const notificationRoutes = require('./routes/notifications');
+const otRouter = require('./routes/ot');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -64,6 +65,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/ot', otRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
@@ -116,11 +118,25 @@ mongoose.connect(process.env.MONGO_URI)
 io.on('connection', socket => {
   console.log('User connected:', socket.id);
 
+  // Join room based on employeeId from query
+  const { employeeId } = socket.handshake.query;
+  if (employeeId) {
+    socket.join(employeeId);
+    console.log(`Socket ${socket.id} joined room ${employeeId}`);
+  } else {
+    console.warn(`Socket ${socket.id} connected without employeeId`);
+  }
+
+  // Handle explicit 'join' event (for compatibility)
   socket.on('join', userId => {
-    socket.join(userId);
+    if (userId) {
+      socket.join(userId);
+      console.log(`Socket ${socket.id} joined room ${userId} via join event`);
+    }
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
 });
+

@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useEffect, useState, useContext, useCallback } from 'react';
 import {
   Card,
@@ -23,7 +21,15 @@ import {
   SelectItem,
   SelectValue,
 } from "../components/ui/select";
-import ReactPaginate from 'react-paginate';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../components/ui/dialog";
+import Pagination from "./Pagination";
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
 import { AuthContext } from '../context/AuthContext';
@@ -40,11 +46,12 @@ function LeaveList() {
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(10);
 
-  const fetchLeaves = useCallback(async (currentPage = page) => {
+  const fetchLeaves = useCallback(async (currentPage = page, currentLimit = limit) => {
     try {
       setLoading(true);
       setError(null);
@@ -54,7 +61,7 @@ function LeaveList() {
         fromDate: filters.fromDate,
         toDate: filters.toDate,
         page: currentPage,
-        limit,
+        limit: currentLimit,
       }).toString();
       const res = await api.get(`/leaves?${query}`);
       setLeaves(res.data.leaves);
@@ -76,7 +83,6 @@ function LeaveList() {
   const handleFilterChange = (name, value) => {
     let newFilters = { ...filters, [name]: value };
 
-    // Validate date range
     if (name === 'fromDate' || name === 'toDate') {
       const fromDate = name === 'fromDate' ? value : filters.fromDate;
       const toDate = name === 'toDate' ? value : filters.toDate;
@@ -87,7 +93,7 @@ function LeaveList() {
     }
 
     setFilters(newFilters);
-    setPage(1); // Reset to first page on filter change
+    setPage(1);
     const query = new URLSearchParams({
       leaveType: newFilters.leaveType,
       status: newFilters.status,
@@ -138,11 +144,20 @@ function LeaveList() {
     }
   };
 
-  const handlePageChange = ({ selected }) => {
-    const newPage = selected + 1;
+  const handlePageChange = (newPage) => {
     setPage(newPage);
-    fetchLeaves(newPage);
+    fetchLeaves(newPage, limit);
   };
+
+  const handlePageSizeChange = (newSize) => {
+    setLimit(newSize);
+    setPage(1);
+    fetchLeaves(1, newSize);
+  };
+
+  // Debug user loginType and leave status
+  console.log('User loginType:', user?.loginType);
+  console.log('Leaves:', leaves);
 
   return (
     <ContentLayout title="Leave List">
@@ -165,7 +180,6 @@ function LeaveList() {
           </div>
           {/* Filters */}
           <div className="flex flex-wrap gap-4 mb-6">
-            {/* Leave Type Filter */}
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="leaveType" className="text-sm font-medium text">
                 Leave Type
@@ -181,14 +195,16 @@ function LeaveList() {
                 </SelectTrigger>
                 <SelectContent className="z-50">
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="Paid">Paid</SelectItem>
-                  <SelectItem value="Unpaid">Unpaid</SelectItem>
+                  <SelectItem value="Casual">Casual</SelectItem>
+                  <SelectItem value="Medical">Medical</SelectItem>
+                  <SelectItem value="Maternity">Maternity</SelectItem>
+                  <SelectItem value="Paternity">Paternity</SelectItem>
                   <SelectItem value="Compensatory">Compensatory</SelectItem>
+                  <SelectItem value="Restricted Holidays">Restricted Holidays</SelectItem>
+                  <SelectItem value="Leave Without Pay(LWP)">Leave Without Pay(LWP)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Status Filter */}
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="status" className="text-sm font-medium text">
                 Approval Status (Any Stage)
@@ -210,8 +226,6 @@ function LeaveList() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* From Date Filter */}
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="fromDate" className="text-sm font-medium text-gray-700">
                 From Date
@@ -227,8 +241,6 @@ function LeaveList() {
                 disabled={loading}
               />
             </div>
-
-            {/* To Date Filter */}
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="toDate" className="text-sm font-medium text-gray-700">
                 To Date
@@ -245,17 +257,15 @@ function LeaveList() {
               />
             </div>
           </div>
-
-          {/* Table */}
           <div className="overflow-x-auto">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="border-b">
                   <TableHead className="font-semibold text">Employee</TableHead>
                   <TableHead className="font-semibold text">Type</TableHead>
-                  <TableHead className="font-semibold text">Category</TableHead>
                   <TableHead className="font-semibold text">From</TableHead>
                   <TableHead className="font-semibold text">To</TableHead>
+                  <TableHead className="font-semibold text">View</TableHead>
                   <TableHead className="font-semibold text">Status (HOD)</TableHead>
                   <TableHead className="font-semibold text">Status (Admin)</TableHead>
                   <TableHead className="font-semibold text">Status (CEO)</TableHead>
@@ -284,121 +294,146 @@ function LeaveList() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((leave) => (
-                    <TableRow key={leave._id} className="hover:bg-gray-50">
-                      <TableCell className="text">{leave.name}</TableCell>
-                      <TableCell className="text">
-                        {leave.isCompensatory ? 'Compensatory' : leave.leaveType}
-                      </TableCell>
-                      <TableCell className="text">{leave.category}</TableCell>
-                      <TableCell className="text">
-                        {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text">
-                        {new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text">{leave.status.hod || 'Pending'}</TableCell>
-                      <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
-                      <TableCell className="text">{leave.status.ceo || 'Pending'}</TableCell>
-                      {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
-                        <TableCell>
-                          {user.loginType === 'HOD' && leave.status.hod === 'Pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(leave._id, 'Approved', 'hod')}
-                                disabled={loading || leave.status.hod !== 'Pending'}
-                                aria-label={`Approve leave for ${leave.name}`}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(leave._id, 'Rejected', 'hod')}
-                                disabled={loading || leave.status.hod !== 'Pending'}
-                                aria-label={`Reject leave for ${leave.name}`}
-                              >
-                                Reject
-                              </Button>
-                            </div>
-                          )}
-                          {user.loginType === 'Admin' && leave.status.hod === 'Approved' && leave.status.admin === 'Pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
-                                disabled={loading || leave.status.admin !== 'Pending'}
-                                aria-label={`Approve leave for ${leave.name}`}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="bg-red-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
-                                disabled={loading || leave.status.admin !== 'Pending'}
-                                aria-label={`Reject leave for ${leave.name}`}
-                              >
-                                Reject
-                              </Button>
-                            </div>
-                          )}
-                          {user.loginType === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(leave._id, 'Approved', 'ceo')}
-                                disabled={loading || leave.status.ceo !== 'Pending'}
-                                aria-label={`Approve leave for ${leave.name}`}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(leave._id, 'Rejected', 'ceo')}
-                                disabled={loading || leave.status.ceo !== 'Pending'}
-                                aria-label={`Reject leave for ${leave.name}`}
-                              >
-                                Reject
-                              </Button>
-                            </div>
-                          )}
+                  filtered.map((leave) => {
+                    console.log(`Leave ID: ${leave._id}, Status:`, leave.status, `User LoginType: ${user?.loginType}`);
+                    return (
+                      <TableRow key={leave._id} className="hover:bg-gray-50">
+                        <TableCell className="text">{leave.name}</TableCell>
+                        <TableCell className="text">{leave.leaveType}</TableCell>
+                        <TableCell className="text">
+                          {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))
+                        <TableCell className="text">
+                          {new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            onClick={() => setSelectedLeave(leave)}
+                            className="bg-blue-600 text-white"
+                          >
+                            View
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text">{leave.status.hod || 'Pending'}</TableCell>
+                        <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
+                        <TableCell className="text">{leave.status.ceo || 'Pending'}</TableCell>
+                        {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
+                          <TableCell>
+                            {user.loginType === 'HOD' && leave.status.hod === 'Pending' && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Approved', 'hod')}
+                                  disabled={loading || leave.status.hod !== 'Pending'}
+                                  aria-label={`Approve leave for ${leave.name}`}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Rejected', 'hod')}
+                                  disabled={loading || leave.status.hod !== 'Pending'}
+                                  aria-label={`Reject leave for ${leave.name}`}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                            {user.loginType === 'Admin' && leave.status.hod === 'Approved' && leave.status.admin === 'Pending' && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
+                                  disabled={loading || leave.status.admin !== 'Pending'}
+                                  aria-label={`Approve leave for ${leave.name}`}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
+                                  disabled={loading || leave.status.admin !== 'Pending'}
+                                  aria-label={`Reject leave for ${leave.name}`}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                            {user.loginType === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending' && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Approved', 'ceo')}
+                                  disabled={loading || leave.status.ceo !== 'Pending'}
+                                  aria-label={`Approve leave for ${leave.name}`}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Rejected', 'ceo')}
+                                  disabled={loading || leave.status.ceo !== 'Pending'}
+                                  aria-label={`Reject leave for ${leave.name}`}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
-          </div>
 
-          {/* Pagination */}
-          {total > limit && (
-            <ReactPaginate
-              previousLabel={'Previous'}
-              nextLabel={'Next'}
-              breakLabel={'...'}
-              pageCount={Math.ceil(total / limit)}
-              marginPagesDisplayed={2}
-              pageRangeDisplayed={5}
+            <Pagination
+              currentPage={page}
+              itemsPerPage={limit}
+              totalItems={total}
               onPageChange={handlePageChange}
-              containerClassName={'pagination'}
-              activeClassName={'active'}
-              disabledClassName={'disabled'}
-              forcePage={page - 1}
+              onPageSizeChange={handlePageSizeChange}
             />
-          )}
+
+            <Dialog open={!!selectedLeave} onOpenChange={() => setSelectedLeave(null)}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Leave Details</DialogTitle>
+                  <DialogDescription>
+                    Complete details of the selected leave application.
+                  </DialogDescription>
+                </DialogHeader>
+                {selectedLeave && (
+                  <div className="space-y-3">
+                    <p><strong>Leave Type:</strong> {selectedLeave.leaveType}</p>
+                    <p><strong>Reason:</strong> {selectedLeave.reason}</p>
+                    <p><strong>Charge Given To:</strong> {selectedLeave.chargeGivenTo}</p>
+                    <p><strong>Emergency Contact:</strong> {selectedLeave.emergencyContact}</p>
+                    {selectedLeave.compensatoryDate && <p><strong>Compensatory Date:</strong> {new Date(selectedLeave.compensatoryDate).toLocaleDateString()}</p>}
+                    {selectedLeave.projectDetails && <p><strong>Project Details:</strong> {selectedLeave.projectDetails}</p>}
+                    {selectedLeave.restrictedHoliday && <p><strong>Restricted Holiday:</strong> {selectedLeave.restrictedHoliday}</p>}
+                  </div>
+                )}
+                <DialogFooter className="mt-4">
+                  <Button onClick={() => setSelectedLeave(null)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
     </ContentLayout>

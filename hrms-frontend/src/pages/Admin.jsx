@@ -9,6 +9,7 @@ import Attendance from '../components/Attendance';
 import LeaveForm from '../components/LeaveForm';
 import LeaveList from '../components/LeaveList';
 import MyDashboard from '../components/EmployeeDashboard'
+import ApproveOT from '../components/OTApproval'
 
 function Admin() {
   return (
@@ -24,6 +25,7 @@ function Admin() {
           <Route path="attendance" element={<Attendance />} />
           <Route path="leave" element={<LeaveForm />} />
           <Route path="approve-leave" element={<LeaveList />} />
+          <Route path="approve-ot" element={<ApproveOT />} />
         </Routes>
       </div>
     </div>

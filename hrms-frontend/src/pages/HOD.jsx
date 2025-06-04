@@ -8,6 +8,7 @@ import LeaveForm from '../components/LeaveForm';
 import LeaveList from '../components/LeaveList';
 import Attendance from '../components/Attendance';
 import MyDashboard from '../components/EmployeeDashboard'
+import ApproveOT from '../components/OTApproval';
 
 function HOD() {
   return (
@@ -22,6 +23,7 @@ function HOD() {
           <Route path="leave" element={<LeaveForm />} />
           <Route path="approve-leave" element={<LeaveList />} />
           <Route path="attendance" element={<Attendance />} />
+          <Route path="approve-ot" element={<ApproveOT />} />
         </Routes>
       </div>
     </div>

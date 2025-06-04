@@ -1,7 +1,9 @@
+// backend/routes/dashboard.js
 const express = require('express');
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
+const OT = require('../models/OTClaim'); // OTClaim model
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
@@ -12,7 +14,6 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
     const { loginType, employeeId } = req.user;
     let departmentId = null;
 
-    // For HOD, get their department
     if (loginType === 'HOD') {
       const hod = await Employee.findOne({ employeeId }).select('department');
       if (!hod?.department?._id) {
@@ -21,13 +22,11 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       departmentId = hod.department._id;
     }
 
-    // Current date for presentToday
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
-    // Employee status aggregation
     const employeeMatch = departmentId ? { department: departmentId, status: 'Working' } : { status: 'Working' };
     const employeeStats = await Employee.aggregate([
       { $match: employeeMatch },
@@ -68,7 +67,6 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       }
     });
 
-    // Present today aggregation
     const attendanceMatch = {
       logDate: { $gte: today, $lt: tomorrow },
       status: 'Present',
@@ -79,18 +77,23 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
     }
     const presentToday = await Attendance.countDocuments(attendanceMatch);
 
-    // Pending leaves aggregation
     let leaveMatch = {};
     if (loginType === 'Admin') {
-      leaveMatch = { 'status.admin': 'Pending' };
+      leaveMatch = {
+        'status.admin': 'Pending',
+        'employee': { $nin: await Employee.find({ loginType: 'Admin' }).select('_id') }
+      };
     } else if (loginType === 'CEO') {
       leaveMatch = { 'status.ceo': 'Pending' };
     } else if (loginType === 'HOD') {
-      leaveMatch = { 'status.hod': 'Pending', department: departmentId };
+      leaveMatch = {
+        'status.hod': 'Pending',
+        department: departmentId,
+        'employee': { $nin: await Employee.find({ loginType: { $in: ['HOD', 'Admin'] } }).select('_id') }
+      };
     }
     const pendingLeaves = await Leave.countDocuments(leaveMatch);
 
-    // Compile response
     const stats = {
       confirmedEmployees: employeeCounts.Confirmed,
       probationEmployees: employeeCounts.Probation,
@@ -108,7 +111,33 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
   }
 });
 
-// New endpoint for employee dashboard stats
+// Endpoint for employee info
+router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
+  try {
+    const { employeeId } = req.user;
+    const employee = await Employee.findOne({ employeeId }).select('employeeType paidLeaves restrictedHolidays compensatoryLeaves');
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    console.log(`Fetched employee info for ${employeeId}:`, {
+      employeeType: employee.employeeType,
+      paidLeaves: employee.paidLeaves,
+      restrictedHolidays: employee.restrictedHolidays,
+      compensatoryLeaves: employee.compensatoryLeaves,
+    });
+    res.json({
+      employeeType: employee.employeeType,
+      paidLeaves: employee.paidLeaves,
+      restrictedHolidays: employee.restrictedHolidays,
+      compensatoryLeaves: employee.compensatoryLeaves,
+    });
+  } catch (err) {
+    console.error('Error fetching employee info:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Endpoint for employee dashboard stats
 router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
   try {
     const { employeeId, loginType } = req.user;
@@ -122,18 +151,14 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       return res.status(400).json({ message: 'Invalid attendanceView. Must be "daily", "monthly", or "yearly"' });
     }
 
-    const employee = await Employee.findOne({ employeeId }).select('employeeType paidLeaves unpaidLeavesTaken');
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
-    }
-
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    endOfMonth.setHours(23, 59, 59, 999);
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const endOfYear = new Date(today.getFullYear(), 11, 31);
+    endOfYear.setHours(23, 59, 59, 999);
 
-    // Attendance Data
     const attendanceQuery = {
       employeeId,
       logDate: { $gte: new Date(fromDate), $lte: new Date(toDate) },
@@ -168,85 +193,93 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       });
     }
 
-    // Paid Leaves Remaining
-    let paidLeavesRemaining = { monthly: 0, yearly: 0 };
+    const employee = await Employee.findOne({ employeeId }).select('employeeType');
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    const normalizeDate = (date) => {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+
+    let leaveDaysTaken = { monthly: 0, yearly: 0 };
     if (employee.employeeType === 'Confirmed') {
-      // For Staff: Calculate monthly and yearly remaining leaves
-      const leavesThisMonth = await Leave.find({
+      const leaveQueryBase = {
         employeeId,
-        leaveType: 'Paid',
+        leaveType: { $in: ['Casual', 'Medical', 'Maternity', 'Paternity'] },
+        'status.hod': 'Approved',
+        'status.admin': 'Approved',
+        'status.ceo': 'Approved',
+      };
+      const leavesThisMonth = await Leave.find({
+        ...leaveQueryBase,
         $or: [
           { 'fullDay.from': { $gte: startOfMonth, $lte: endOfMonth } },
           { 'halfDay.date': { $gte: startOfMonth, $lte: endOfMonth } },
         ],
-        'status.hod': 'Approved',
-        'status.admin': 'Approved',
-        'status.ceo': 'Approved',
       });
       const leavesThisYear = await Leave.find({
-        employeeId,
-        leaveType: 'Paid',
+        ...leaveQueryBase,
         $or: [
           { 'fullDay.from': { $gte: startOfYear, $lte: endOfYear } },
           { 'halfDay.date': { $gte: startOfYear, $lte: endOfYear } },
         ],
-        'status.hod': 'Approved',
-        'status.admin': 'Approved',
-        'status.ceo': 'Approved',
       });
 
-      const monthlyDays = leavesThisMonth.reduce((total, leave) => {
-        if (leave.halfDay?.date) return total + 0.5;
-        const from = new Date(leave.fullDay.from);
-        const to = new Date(leave.fullDay.to);
-        const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-        return total + days;
-      }, 0);
+      console.log(`Leaves this month for ${employeeId}:`, leavesThisMonth.map(l => ({
+        _id: l._id,
+        leaveType: l.leaveType,
+        fullDay: l.fullDay,
+        halfDay: l.halfDay,
+      })));
 
-      const yearlyDays = leavesThisYear.reduce((total, leave) => {
-        if (leave.halfDay?.date) return total + 0.5;
-        const from = new Date(leave.fullDay.from);
-        const to = new Date(leave.fullDay.to);
-        const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-        return total + days;
-      }, 0);
-
-      paidLeavesRemaining = {
-        monthly: employee.paidLeaves - monthlyDays,
-        yearly: employee.paidLeaves - yearlyDays,
+      const calculateDays = (leave) => {
+        if (leave.halfDay?.date) {
+          if (leave.fullDay?.from || leave.fullDay?.to) {
+            console.warn(`Leave ${leave._id} has both halfDay and fullDay for ${employeeId}`);
+            return 0.5; // Prioritize half-day
+          }
+          console.log(`Leave ${leave._id}: 0.5 days (half-day)`);
+          return 0.5;
+        }
+        if (leave.fullDay?.from && leave.fullDay?.to) {
+          const from = normalizeDate(leave.fullDay.from);
+          const to = normalizeDate(leave.fullDay.to);
+          if (from > to) {
+            console.warn(`Invalid leave ${leave._id}: from (${from}) after to (${to})`);
+            return 0;
+          }
+          const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+          console.log(`Leave ${leave._id}: ${days} days from ${from} to ${to}`);
+          return days;
+        }
+        console.warn(`Leave ${leave._id}: No valid dates`);
+        return 0;
       };
-    } else {
-      // For Interns, Contractual, Probation: Only monthly
-      const leavesThisMonth = await Leave.find({
-        employeeId,
-        leaveType: 'Paid',
-        $or: [
-          { 'fullDay.from': { $gte: startOfMonth, $lte: endOfMonth } },
-          { 'halfDay.date': { $gte: startOfMonth, $lte: endOfMonth } },
-        ],
-        'status.hod': 'Approved',
-        'status.admin': 'Approved',
-        'status.ceo': 'Approved',
+
+      const seenRanges = new Set();
+      const deduplicatedLeaves = leavesThisMonth.filter(leave => {
+        if (leave.fullDay?.from && leave.fullDay.to) {
+          const rangeKey = `${normalizeDate(leave.fullDay.from).toISOString()}-${normalizeDate(leave.fullDay.to).toISOString()}`;
+          if (seenRanges.has(rangeKey)) {
+            console.warn(`Duplicate leave ${leave._id} with range ${rangeKey}`);
+            return false;
+          }
+          seenRanges.add(rangeKey);
+          return true;
+        }
+        return true;
       });
 
-      const monthlyDays = leavesThisMonth.reduce((total, leave) => {
-        if (leave.halfDay?.date) return total + 0.5;
-        const from = new Date(leave.fullDay.from);
-        const to = new Date(leave.fullDay.to);
-        const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-        return total + days;
-      }, 0);
-
-      paidLeavesRemaining = {
-        monthly: employee.paidLeaves - monthlyDays,
-        yearly: 0, // Not applicable for non-Confirmed
-      };
+      leaveDaysTaken.monthly = deduplicatedLeaves.reduce((total, leave) => total + calculateDays(leave), 0);
+      leaveDaysTaken.yearly = leavesThisYear.reduce((total, leave) => total + calculateDays(leave), 0);
     }
 
-    // Unpaid Leaves Taken (Monthly)
     const unpaidLeavesQuery = {
       employeeId,
-      leaveType: 'Unpaid',
+      leaveType: 'Leave Without Pay(LWP)',
       $or: [
         { 'fullDay.from': { $gte: startOfMonth, $lte: endOfMonth } },
         { 'halfDay.date': { $gte: startOfMonth, $lte: endOfMonth } },
@@ -257,34 +290,39 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     };
     const unpaidLeavesRecords = await Leave.find(unpaidLeavesQuery);
     const unpaidLeavesTaken = unpaidLeavesRecords.reduce((total, leave) => {
-      if (leave.halfDay?.date) return total + 0.5;
-      const from = new Date(leave.fullDay.from);
-      const to = new Date(leave.fullDay.to);
-      const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-      return total + days;
+      if (leave.halfDay?.date) { // Fixed: Check halfDay.date, not halfDay.fullDay
+        return total + 0.5;
+      }
+      if (leave.fullDay?.from && leave.fullDay?.to) {
+        const from = normalizeDate(leave.fullDay.from); // Fixed: Use .from, not .fromDate
+        const to = normalizeDate(leave.fullDay.to);
+        const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+        return total + days;
+      }
+      return total;
     }, 0);
 
-    // Leave Application Records
-    const leaveRecords = await Leave.find({ employeeId })
+    const leaveRecords = await Leave.find({ employeeId }).sort({ createdAt: -1 }).limit(10);
+
+    // Fetch OT claims
+    const otQuery = {
+      employeeId,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+      'status.ceo': 'Approved', // Only approved claims
+    };
+    const otRecords = await OT.find(otQuery); // Fixed: Use OT, not ot
+    const overtimeHours = otRecords.reduce((sum, ot) => sum + (ot.hours || 0), 0);
+
+    const otClaimRecords = await OT.find({ employeeId })
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Overtime (Monthly)
-    const overtimeQuery = {
-      employeeId,
-      logDate: { $gte: startOfMonth, $lte: endOfMonth },
-    };
-    const overtimeRecords = await Attendance.find(overtimeQuery);
-    const overtimeMinutes = overtimeRecords.reduce((total, record) => total + (record.ot || 0), 0);
-    const overtimeHours = overtimeMinutes / 60;
-
-    // Compile response
     const stats = {
       attendanceData,
-      paidLeavesRemaining,
-      unpaidLeavesTaken,
       leaveRecords,
+      unpaidLeavesTaken,
       overtimeHours,
+      otClaimRecords, // Fixed: Return otClaimRecords, not otRecords
     };
 
     console.log(`Employee dashboard stats for ${employeeId}:`, stats);

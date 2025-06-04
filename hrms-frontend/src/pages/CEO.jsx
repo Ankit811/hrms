@@ -5,6 +5,7 @@ import Dashboard from '../components/Dashboard';
 import Profile from '../components/Profile'
 import LeaveList from '../components/LeaveList';
 import EmployeeList from '../components/EmployeeList';
+import ApproveOT from '../components/OTApproval';
 
 function CEO() {
   return (
@@ -16,6 +17,7 @@ function CEO() {
           <Route path="profile" element={<Profile/>} />
           <Route path="approve-leaves" element={<LeaveList />} />
           <Route path="employees" element={<EmployeeList />} />
+          <Route path="approve-ot" element={<ApproveOT />} />
         </Routes>
       </div>
     </div>

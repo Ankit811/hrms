@@ -1,13 +1,14 @@
-"use client";
-
-import React, { useEffect, useState, useContext } from 'react';
+// frontend/src/components/EmployeeDashboard.jsx
+import React, { useEffect, useContext, useCallback, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select';
+import { Button } from '../components/ui/button';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import ContentLayout from './ContentLayout';
+import io from 'socket.io-client';
 
 function EmployeeDashboard() {
   const { user } = useContext(AuthContext);
@@ -17,55 +18,112 @@ function EmployeeDashboard() {
     unpaidLeavesTaken: 0,
     leaveRecords: [],
     overtimeHours: 0,
+    restrictedHolidays: 0,
+    compensatoryLeaves: 0,
+    otClaimRecords: [], // Changed to match backend response
   });
   const [attendanceView, setAttendanceView] = useState('daily');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) {
-        setError('User not authenticated. Please log in.');
-        setLoading(false);
-        return;
+    if (user?.employeeId) {
+      const socketInstance = io(import.meta.env.VITE_APP_API_URL || 'http://localhost:5000', {
+        query: { employeeId: user.employeeId },
+        transports: ['websocket', 'polling'],
+        withCredentials: true,
+      });
+
+      socketInstance.on('connect', () => {
+        console.log('WebSocket connected');
+      });
+      socketInstance.on('connect_error', (err) => {
+        console.error('WebSocket connection error:', err.message);
+      });
+
+      setSocket(socketInstance);
+
+      return () => {
+        socketInstance.disconnect();
+        console.log('WebSocket disconnected');
+      };
+    }
+  }, [user?.employeeId]);
+
+  const fetchData = useCallback(async () => {
+    if (!user) {
+      setError('User not authenticated. Please log in.');
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch employee info
+      const employeeRes = await api.get('/dashboard/employee-info');
+      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves } = employeeRes.data;
+
+      // Fetch stats
+      const today = new Date();
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      const endOfYear = new Date(today.getFullYear(), 11, 31);
+      let fromDate, toDate;
+      if (attendanceView === 'daily') {
+        fromDate = new Date(today);
+        toDate = new Date(today);
+        fromDate.setHours(0, 0, 0, 0);
+        toDate.setHours(23, 59, 59, 999);
+      } else if (attendanceView === 'monthly') {
+        fromDate = startOfMonth;
+        toDate = endOfMonth;
+      } else {
+        fromDate = startOfYear;
+        toDate = endOfYear;
       }
+      const statsRes = await api.get(`/dashboard/employee-stats?attendanceView=${attendanceView}&fromDate=${fromDate.toISOString()}&toDate=${toDate.toISOString()}`);
 
-      try {
-        setLoading(true);
-        setError(null);
-
-        const today = new Date();
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        const startOfYear = new Date(today.getFullYear(), 0, 1);
-        const endOfYear = new Date(today.getFullYear(), 11, 31);
-
-        let fromDate, toDate;
-        if (attendanceView === 'daily') {
-          fromDate = new Date(today);
-          toDate = new Date(today);
-          fromDate.setHours(0, 0, 0, 0);
-          toDate.setHours(23, 59, 59, 999);
-        } else if (attendanceView === 'monthly') {
-          fromDate = startOfMonth;
-          toDate = endOfMonth;
-        } else {
-          fromDate = startOfYear;
-          toDate = endOfYear;
-        }
-
-        const res = await api.get(`/dashboard/employee-stats?attendanceView=${attendanceView}&fromDate=${fromDate.toISOString()}&toDate=${toDate.toISOString()}`);
-        setData(res.data);
-      } catch (err) {
-        console.error('Employee dashboard fetch error:', err);
-        setError(err.response?.data?.message || 'Failed to fetch dashboard data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+      // Combine data
+      setData({
+        attendanceData: statsRes.data.attendanceData,
+        paidLeavesRemaining: {
+          monthly: paidLeaves,
+          yearly: employeeType === 'Confirmed' ? paidLeaves : 0,
+        },
+        unpaidLeavesTaken: statsRes.data.unpaidLeavesTaken,
+        leaveRecords: statsRes.data.leaveRecords,
+        overtimeHours: statsRes.data.overtimeHours,
+        restrictedHolidays: restrictedHolidays,
+        compensatoryLeaves: compensatoryLeaves,
+        otClaimRecords: statsRes.data.otClaimRecords || [], // Changed to match backend
+      });
+      console.log('Dashboard data:', {
+        employee: employeeRes.data,
+        stats: statsRes.data,
+      });
+    } catch (err) {
+      console.error('Employee dashboard fetch error:', err);
+      setError(err.response?.data?.message || 'Failed to fetch dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [user, attendanceView]);
+
+  useEffect(() => {
+    fetchData();
+    if (socket && user?.employeeId) {
+      socket.on('notification', () => {
+        console.log('Received notification, refreshing dashboard data');
+        fetchData();
+      });
+      return () => {
+        socket.off('notification');
+      };
+    }
+  }, [fetchData, socket, user?.employeeId]);
 
   if (loading) {
     return (
@@ -86,7 +144,6 @@ function EmployeeDashboard() {
   return (
     <ContentLayout title="My Dashboard">
       <div className="flex flex-col items-center w-full">
-        {/* Metric Cards */}
         <div className="flex items-center justify-around gap-6 w-full">
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
             <CardHeader className="p-2">
@@ -98,8 +155,7 @@ function EmployeeDashboard() {
               <p className="text-xl font-bold text-blue-600">
                 Monthly: {data.paidLeavesRemaining.monthly}
               </p>
-              {console.log('User:', user, 'Paid Leaves Remaining:', data.paidLeavesRemaining)}
-              {user.employeeType === 'Staff' && (
+              {user.employeeType === 'Confirmed' && (
                 <p className="text-xl font-bold text-blue-600 mt-2">
                   Yearly: {data.paidLeavesRemaining.yearly}
                 </p>
@@ -116,6 +172,16 @@ function EmployeeDashboard() {
               <p className="text-3xl font-bold text-purple-600 text-center">{data.unpaidLeavesTaken}</p>
             </CardContent>
           </Card>
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-teal-800 text-center">
+                Compensatory Leaves
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-teal-600 text-center">{data.compensatoryLeaves.toFixed(1)} hrs</p>
+            </CardContent>
+          </Card>
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
             <CardHeader className="p-2">
               <CardTitle className="text-lg font-semibold text-green-800 text-center">
@@ -128,9 +194,17 @@ function EmployeeDashboard() {
               </p>
             </CardContent>
           </Card>
+          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
+            <CardHeader className="p-2">
+              <CardTitle className="text-lg font-semibold text-yellow-800 text-center">
+                Restricted Holidays
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <p className="text-3xl font-bold text-yellow-600 text-center">{data.restrictedHolidays}</p>
+            </CardContent>
+          </Card>
         </div>
-
-        {/* Attendance Chart */}
         <div className="mt-8 grid grid-cols-1 gap-6 w-full max-w-[900px]">
           <Card>
             <CardHeader className="flex flex-row justify-between items-center">
@@ -162,8 +236,6 @@ function EmployeeDashboard() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-
-          {/* Leave Records Table */}
           <Card>
             <CardHeader>
               <CardTitle>Leave Application Records</CardTitle>
@@ -173,42 +245,79 @@ function EmployeeDashboard() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow className="border-b">
-                      <TableHead className="font-semibold text">Type</TableHead>
-                      <TableHead className="font-semibold text">Category</TableHead>
-                      <TableHead className="font-semibold text">From</TableHead>
-                      <TableHead className="font-semibold text">To</TableHead>
-                      <TableHead className="font-semibold text">Status (HOD)</TableHead>
-                      <TableHead className="font-semibold text">Status (Admin)</TableHead>
-                      <TableHead className="font-semibold text">Status (CEO)</TableHead>
+                      <TableHead className="font-semibold">Type</TableHead>
+                      <TableHead className="font-semibold">From</TableHead>
+                      <TableHead className="font-semibold">To</TableHead>
+                      <TableHead className="font-semibold">Status (HOD)</TableHead>
+                      <TableHead className="font-semibold">Status (Admin)</TableHead>
+                      <TableHead className="font-semibold">Status (CEO)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.leaveRecords.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text py-4">
+                        <TableCell colSpan={6} className="text-center py-4">
                           No leave records found.
                         </TableCell>
                       </TableRow>
                     ) : (
                       data.leaveRecords.map((leave) => (
                         <TableRow key={leave._id} className="hover:bg-gray-50">
-                          <TableCell className="text">
-                            {leave.isCompensatory ? 'Compensatory' : leave.leaveType}
-                          </TableCell>
-                          <TableCell className="text">{leave.category}</TableCell>
-                          <TableCell className="text">
+                          <TableCell>{leave.leaveType}</TableCell>
+                          <TableCell>
                             {(leave.fullDay?.from || leave.halfDay?.date)
                               ? new Date(leave.fullDay?.from || leave.halfDay?.date).toLocaleDateString()
                               : 'N/A'}
                           </TableCell>
-                          <TableCell className="text">
+                          <TableCell>
                             {(leave.fullDay?.to || leave.halfDay?.date)
                               ? new Date(leave.fullDay?.to || leave.halfDay?.date).toLocaleDateString()
                               : 'N/A'}
                           </TableCell>
-                          <TableCell className="text">{leave.status.hod || 'Pending'}</TableCell>
-                          <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
-                          <TableCell className="text">{leave.status.ceo || 'Pending'}</TableCell>
+                          <TableCell>{leave.status.hod || 'Pending'}</TableCell>
+                          <TableCell>{leave.status.admin || 'Pending'}</TableCell>
+                          <TableCell>{leave.status.ceo || 'Pending'}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Overtime Claim Records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table className="min-w-full">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Hours</TableHead>
+                      <TableHead className="font-semibold">Project Details</TableHead>
+                      <TableHead className="font-semibold">Status (HOD)</TableHead>
+                      <TableHead className="font-semibold">Status (Admin)</TableHead>
+                      <TableHead className="font-semibold">Status (CEO)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.otClaimRecords.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-4">
+                          No overtime records found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data.otClaimRecords.map((ot) => (
+                        <TableRow key={ot._id} className="hover:bg-gray-50">
+                          <TableCell>{new Date(ot.date).toLocaleDateString()}</TableCell>
+                          <TableCell>{ot.hours}</TableCell>
+                          <TableCell>{ot.projectDetails}</TableCell>
+                          <TableCell>{ot.status.hod || 'Pending'}</TableCell>
+                          <TableCell>{ot.status.admin || 'Pending'}</TableCell>
+                          <TableCell>{ot.status.ceo || 'Pending'}</TableCell>
                         </TableRow>
                       ))
                     )}
