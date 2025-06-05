@@ -27,24 +27,26 @@ function LeaveForm() {
     reason: '',
     chargeGivenTo: '',
     emergencyContact: '',
-    compensatoryDate: '',
+    compensatoryEntryId: '', // New field for selected entry
     restrictedHoliday: '',
     projectDetails: '',
     duration: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [compensatoryBalance, setCompensatoryBalance] = useState(0);
+  const [compensatoryEntries, setCompensatoryEntries] = useState([]); // New state for entries
 
   useEffect(() => {
-    const fetchCompensatoryBalance = async () => {
+    const fetchCompensatoryData = async () => {
       try {
         const res = await api.get('/dashboard/employee-info');
         setCompensatoryBalance(res.data.compensatoryLeaves || 0);
+        setCompensatoryEntries(res.data.compensatoryAvailable || []);
       } catch (err) {
-        console.error('Error fetching compensatory balance:', err);
+        console.error('Error fetching compensatory data:', err);
       }
     };
-    fetchCompensatoryBalance();
+    fetchCompensatoryData();
   }, []);
 
   const handleChange = e => {
@@ -64,6 +66,10 @@ function LeaveForm() {
     } else {
       setForm(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  const handleCompensatoryEntryChange = (value) => {
+    setForm(prev => ({ ...prev, compensatoryEntryId: value }));
   };
 
   const calculateLeaveDays = () => {
@@ -102,10 +108,13 @@ function LeaveForm() {
       return 'To Date cannot be earlier than From Date';
     }
     if (form.leaveType === 'Compensatory') {
+      if (!form.compensatoryEntryId) return 'Compensatory leave entry is required';
+      const entry = compensatoryEntries.find(e => e._id === form.compensatoryEntryId);
+      if (!entry || entry.status !== 'Available') return 'Invalid or unavailable compensatory leave entry';
       const leaveDays = calculateLeaveDays();
-      const hoursNeeded = leaveDays * 8;
-      if (compensatoryBalance < hoursNeeded) {
-        return 'Insufficient compensatory leave balance';
+      const hoursNeeded = leaveDays === 0.5 ? 4 : 8;
+      if (entry.hours !== hoursNeeded) {
+        return `Selected entry (${entry.hours} hours) does not match leave duration (${leaveDays === 0.5 ? 'Half Day (4 hours)' : 'Full Day (8 hours)'})`;
       }
     }
     if (form.leaveType === 'Restricted Holidays' && !form.restrictedHoliday) {
@@ -192,7 +201,7 @@ function LeaveForm() {
         reason: form.reason,
         chargeGivenTo: form.chargeGivenTo,
         emergencyContact: form.emergencyContact,
-        compensatoryDate: form.compensatoryDate ? new Date(form.compensatoryDate).toISOString() : null,
+        compensatoryEntryId: form.leaveType === 'Compensatory' ? form.compensatoryEntryId : null, // Include entry ID
         restrictedHoliday: form.restrictedHoliday,
         projectDetails: form.projectDetails,
         user: user.id,
@@ -207,15 +216,18 @@ function LeaveForm() {
         reason: '',
         chargeGivenTo: '',
         emergencyContact: '',
-        compensatoryDate: '',
+        compensatoryEntryId: '',
         restrictedHoliday: '',
         projectDetails: '',
         duration: '',
       });
+      // Refresh compensatory data
+      const res = await api.get('/dashboard/employee-info');
+      setCompensatoryBalance(res.data.compensatoryLeaves || 0);
+      setCompensatoryEntries(res.data.compensatoryAvailable || []);
     } catch (err) {
       console.error('Leave submit error:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || 'An error occurred while submitting the leave';
-      // ... (keep existing error handling)
       alert(`Error: ${errorMessage}`);
     } finally {
       setSubmitting(false);
@@ -253,6 +265,27 @@ function LeaveForm() {
                 <div className="col-span-2">
                   <Label htmlFor="compensatoryBalance">Compensatory Leave Balance</Label>
                   <p className="mt-1 text-sm text-gray-600">{compensatoryBalance} hours</p>
+                </div>
+                <div className="col-span-2">
+                  <Label htmlFor="compensatoryEntryId">Compensatory Leave Entry</Label>
+                  <Select
+                    onValueChange={handleCompensatoryEntryChange}
+                    value={form.compensatoryEntryId}
+                    disabled={compensatoryEntries.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={compensatoryEntries.length === 0 ? "No available entries" : "Select compensatory entry"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {compensatoryEntries
+                        .filter(entry => entry.status === 'Available')
+                        .map(entry => (
+                          <SelectItem key={entry._id} value={entry._id}>
+                            {new Date(entry.date).toLocaleDateString()} - {entry.hours} hours
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="col-span-2">
                   <Label htmlFor="projectDetails">Project Details</Label>

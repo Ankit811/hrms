@@ -182,6 +182,7 @@ function OTApproval() {
                   <TableHead className="font-semibold">Employee</TableHead>
                   <TableHead className="font-semibold">Date</TableHead>
                   <TableHead className="font-semibold">Hours</TableHead>
+                  <TableHead className="font-semibold">Claim Type</TableHead>
                   <TableHead className="font-semibold">View</TableHead>
                   <TableHead className="font-semibold">Status (HOD)</TableHead>
                   <TableHead className="font-semibold">Status (Admin)</TableHead>
@@ -194,13 +195,13 @@ function OTApproval() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-4">
+                    <TableCell colSpan={9} className="text-center py-4">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : claims.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-4">
+                    <TableCell colSpan={9} className="text-center py-4">
                       No OT claim records found.
                     </TableCell>
                   </TableRow>
@@ -210,6 +211,7 @@ function OTApproval() {
                       <TableCell>{claim.name}</TableCell>
                       <TableCell>{new Date(claim.date).toLocaleDateString()}</TableCell>
                       <TableCell>{claim.hours}</TableCell>
+                      <TableCell>{claim.claimType || 'N/A'}</TableCell>
                       <TableCell>
                         <Button
                           size="sm"
@@ -222,7 +224,8 @@ function OTApproval() {
                       <TableCell>{claim.status.hod || 'Pending'}</TableCell>
                       <TableCell>{claim.status.admin || 'Pending'}</TableCell>
                       <TableCell>{claim.status.ceo || 'Pending'}</TableCell>
-                      {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
+            
+                      {['HOD', 'Admin', 'CEO'].includes(user.loginType) && (
                         <TableCell>
                           {user.loginType === 'HOD' && claim.status.hod === 'Pending' && (
                             <div className="flex gap-2">
@@ -293,22 +296,27 @@ function OTApproval() {
             </Table>
             <Pagination
               currentPage={page}
-              itemsPerPage={limit}
-              totalItems={total}
-              onPageChange={handlePageChange}
-              onPageSizeChange={handlePageSizeChange}
+              itemsPerPage={
+              limit}
+              totalItems={
+              total}
+              onPageChange={
+                handlePageChange}
+              onPageSizeChange={
+                handlePageSizeChange}
             />
             <Dialog open={!!selectedClaim} onOpenChange={() => setSelectedClaim(null)}>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>OT Claim Details</DialogTitle>
                   <DialogDescription>Complete details of the selected OT claim.</DialogDescription>
                 </DialogHeader>
                 {selectedClaim && (
                   <div className="space-y-3">
-                    <p><strong>Employee:</strong> {selectedClaim.name}</p>
+                    <p><strong>Employee:</strong> {selectedClaim.employeeId}</p>
                     <p><strong>Date:</strong> {new Date(selectedClaim.date).toLocaleDateString()}</p>
                     <p><strong>Hours:</strong> {selectedClaim.hours}</p>
+                    <p><strong>Claim Type:</strong> {selectedClaim.claimType || 'N/A'}</p>
                     <p><strong>Project Details:</strong> {selectedClaim.projectDetails}</p>
                     <p><strong>Compensatory Hours:</strong> {selectedClaim.compensatoryHours || 0}</p>
                     <p><strong>Payment Amount:</strong> {selectedClaim.paymentAmount || 0}</p>

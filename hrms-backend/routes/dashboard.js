@@ -1,9 +1,9 @@
-// backend/routes/dashboard.js
 const express = require('express');
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
 const OT = require('../models/OTClaim'); // OTClaim model
+const Department = require('../models/Department'); // Added for department eligibility
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
@@ -193,7 +193,9 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       });
     }
 
-    const employee = await Employee.findOne({ employeeId }).select('employeeType');
+    const employee = await Employee.findOne({ employeeId })
+      .select('employeeType department compensatoryAvailable')
+      .populate('department');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
@@ -290,11 +292,11 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     };
     const unpaidLeavesRecords = await Leave.find(unpaidLeavesQuery);
     const unpaidLeavesTaken = unpaidLeavesRecords.reduce((total, leave) => {
-      if (leave.halfDay?.date) { // Fixed: Check halfDay.date, not halfDay.fullDay
+      if (leave.halfDay?.date) {
         return total + 0.5;
       }
       if (leave.fullDay?.from && leave.fullDay?.to) {
-        const from = normalizeDate(leave.fullDay.from); // Fixed: Use .from, not .fromDate
+        const from = normalizeDate(leave.fullDay.from);
         const to = normalizeDate(leave.fullDay.to);
         const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
         return total + days;
@@ -304,25 +306,98 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
 
     const leaveRecords = await Leave.find({ employeeId }).sort({ createdAt: -1 }).limit(10);
 
-    // Fetch OT claims
+    // Fetch OT claims (approved only)
     const otQuery = {
       employeeId,
       date: { $gte: startOfMonth, $lte: endOfMonth },
-      'status.ceo': 'Approved', // Only approved claims
+      'status.ceo': 'Approved',
     };
-    const otRecords = await OT.find(otQuery); // Fixed: Use OT, not ot
+    const otRecords = await OT.find(otQuery);
     const overtimeHours = otRecords.reduce((sum, ot) => sum + (ot.hours || 0), 0);
 
     const otClaimRecords = await OT.find({ employeeId })
       .sort({ createdAt: -1 })
       .limit(10);
 
+    // New: Fetch unclaimed and claimed OT entries from Attendance
+    const eligibleDepartments = ['Production', 'Store', 'AMETL', 'Admin'];
+    const isEligible = employee.department && eligibleDepartments.includes(employee.department.name);
+
+    let unclaimedOTRecords = [];
+    let claimedOTRecords = [];
+
+    if (isEligible) {
+      // Fetch all attendance records with OT
+      const otAttendanceQuery = {
+        employeeId,
+        logDate: { $gte: new Date(fromDate), $lte: new Date(toDate) },
+        ot: { $gt: 0 }, // OT in minutes
+      };
+      const otAttendanceRecords = await Attendance.find(otAttendanceQuery).sort({ logDate: -1 });
+
+      // Fetch all OT claims for the employee in the date range
+      const otClaims = await OT.find({
+        employeeId,
+        date: { $gte: new Date(fromDate), $lte: new Date(toDate) },
+      });
+
+      // Normalize dates for comparison
+      const normalizeOTDate = (date) => {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      };
+
+      // Separate unclaimed and claimed OT
+      unclaimedOTRecords = otAttendanceRecords
+        .filter((record) => {
+          const recordDate = normalizeOTDate(record.logDate);
+          const isClaimed = otClaims.some((claim) => normalizeOTDate(claim.date) === recordDate);
+          return !isClaimed;
+        })
+        .map((record) => ({
+          _id: record._id,
+          date: record.logDate,
+          hours: (record.ot / 60).toFixed(1), // Convert minutes to hours
+          day: new Date(record.logDate).toLocaleString('en-US', { weekday: 'long' }),
+          claimDeadline: new Date(record.logDate.getTime() + 24 * 60 * 60 * 1000), // 24 hours from OT date
+        }));
+
+      claimedOTRecords = otClaims.map((claim) => ({
+        _id: claim._id,
+        date: claim.date,
+        hours: claim.hours.toFixed(1),
+        day: new Date(claim.date).toLocaleString('en-US', { weekday: 'long' }),
+        status: {
+          hod: claim.status.hod,
+          admin: claim.status.admin,
+          ceo: claim.status.ceo,
+        },
+        projectDetails: claim.projectDetails,
+        claimType: claim.claimType, // Full or Partial
+      }));
+    }
+
+    // New: Fetch compensatory leave entries
+    const compensatoryLeaveEntries = employee.compensatoryAvailable
+      ? employee.compensatoryAvailable
+          .filter((entry) => entry.status === 'Available')
+          .map((entry) => ({
+            date: entry.date,
+            hours: entry.hours,
+            _id: entry._id || new mongoose.Types.ObjectId().toString(), // Ensure unique ID
+          }))
+      : [];
+
     const stats = {
       attendanceData,
       leaveRecords,
       unpaidLeavesTaken,
       overtimeHours,
-      otClaimRecords, // Fixed: Return otClaimRecords, not otRecords
+      otClaimRecords,
+      unclaimedOTRecords, // New: For OT table
+      claimedOTRecords, // New: For OT table
+      compensatoryLeaveEntries, // New: For Leave form
     };
 
     console.log(`Employee dashboard stats for ${employeeId}:`, stats);

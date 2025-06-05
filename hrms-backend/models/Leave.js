@@ -39,7 +39,7 @@ const leaveSchema = new mongoose.Schema({
   emergencyContact: { type: String, required: true },
 
   // Additional fields for specific leave types
-  compensatoryDate: { type: Date },
+  compensatoryEntryId: { type: mongoose.Schema.Types.ObjectId, default: null },
   projectDetails: { type: String },
   restrictedHoliday: { type: String },
 

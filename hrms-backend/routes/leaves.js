@@ -125,12 +125,16 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
         }
         break;
       case 'Compensatory':
-        if (!req.body.compensatoryDate || !req.body.projectDetails) {
-          return res.status(400).json({ message: 'Compensatory date and project details are required' });
+        if (!req.body.compensatoryEntryId || !req.body.projectDetails) {
+          return res.status(400).json({ message: 'Compensatory entry ID and project details are required' });
         }
-        const hoursNeeded = leaveDays * 8; // 1 day = 8 hours
-        if (user.compensatoryLeaves < hoursNeeded) {
-          return res.status(400).json({ message: 'Insufficient compensatory leave balance' });
+        const entry = user.compensatoryAvailable.find(e => e._id.toString() === req.body.compensatoryEntryId && e.status === 'Available');
+        if (!entry) {
+          return res.status(400).json({ message: 'Invalid or unavailable compensatory leave entry' });
+        }
+        const hoursNeeded = leaveDays === 0.5 ? 4 : 8;
+        if (entry.hours !== hoursNeeded) {
+          return res.status(400).json({ message: `Selected entry (${entry.hours} hours) does not match leave duration (${leaveDays === 0.5 ? 'Half Day (4 hours)' : 'Full Day (8 hours)'})` });
         }
         break;
       case 'Leave Without Pay(LWP)':
@@ -164,7 +168,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       reason: req.body.reason,
       chargeGivenTo: req.body.chargeGivenTo,
       emergencyContact: req.body.emergencyContact,
-      compensatoryDate: req.body.compensatoryDate,
+      compensatoryEntryId: req.body.compensatoryEntryId, // New field
       projectDetails: req.body.projectDetails,
       restrictedHoliday: req.body.restrictedHoliday,
       status
@@ -278,9 +282,11 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
               }
               break;
             case 'Compensatory':
-                const hoursNeeded = leaveDays * 8; // 1 day = 8 hours
-                await user.deductCompensatoryLeaves(hoursNeeded);
-                break;
+              if (!leave.compensatoryEntryId) {
+                return res.status(400).json({ message: 'Compensatory entry ID is required' });
+              }
+              await user.deductCompensatoryLeaves(leave.compensatoryEntryId);
+              break;
             case 'Restricted Holidays':
               if (user.restrictedHolidays >= 1) {
                 await user.deductRestrictedHolidays();

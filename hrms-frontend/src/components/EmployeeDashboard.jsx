@@ -1,4 +1,3 @@
-// frontend/src/components/EmployeeDashboard.jsx
 import React, { useEffect, useContext, useCallback, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -9,6 +8,7 @@ import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import ContentLayout from './ContentLayout';
 import io from 'socket.io-client';
+import OTTable from './OTTable';
 
 function EmployeeDashboard() {
   const { user } = useContext(AuthContext);
@@ -20,7 +20,10 @@ function EmployeeDashboard() {
     overtimeHours: 0,
     restrictedHolidays: 0,
     compensatoryLeaves: 0,
-    otClaimRecords: [], // Changed to match backend response
+    compensatoryAvailable: [],
+    otClaimRecords: [],
+    unclaimedOTRecords: [],
+    claimedOTRecords: [],
   });
   const [attendanceView, setAttendanceView] = useState('daily');
   const [loading, setLoading] = useState(true);
@@ -29,7 +32,7 @@ function EmployeeDashboard() {
 
   useEffect(() => {
     if (user?.employeeId) {
-      const socketInstance = io(import.meta.env.VITE_APP_API_URL || 'http://localhost:5000', {
+      const socketInstance = io(import.meta.env.VITE_APP_API_URL || 'http://localhost:5000d', {
         query: { employeeId: user.employeeId },
         transports: ['websocket', 'polling'],
         withCredentials: true,
@@ -63,7 +66,7 @@ function EmployeeDashboard() {
 
       // Fetch employee info
       const employeeRes = await api.get('/dashboard/employee-info');
-      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves } = employeeRes.data;
+      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, compensatoryAvailable } = employeeRes.data;
 
       // Fetch stats
       const today = new Date();
@@ -86,7 +89,6 @@ function EmployeeDashboard() {
       }
       const statsRes = await api.get(`/dashboard/employee-stats?attendanceView=${attendanceView}&fromDate=${fromDate.toISOString()}&toDate=${toDate.toISOString()}`);
 
-      // Combine data
       setData({
         attendanceData: statsRes.data.attendanceData,
         paidLeavesRemaining: {
@@ -98,7 +100,10 @@ function EmployeeDashboard() {
         overtimeHours: statsRes.data.overtimeHours,
         restrictedHolidays: restrictedHolidays,
         compensatoryLeaves: compensatoryLeaves,
-        otClaimRecords: statsRes.data.otClaimRecords || [], // Changed to match backend
+        compensatoryAvailable: compensatoryAvailable || [],
+        otClaimRecords: statsRes.data.otClaimRecords || [],
+        unclaimedOTRecords: statsRes.data.unclaimedOTRecords || [],
+        claimedOTRecords: statsRes.data.claimedOTRecords || [],
       });
       console.log('Dashboard data:', {
         employee: employeeRes.data,
@@ -166,7 +171,7 @@ function EmployeeDashboard() {
             <CardHeader className="p-2">
               <CardTitle className="text-lg font-semibold text-purple-800 text-center">
                 Unpaid Leaves Taken (Month)
-              </CardTitle>
+                </CardTitle>
             </CardHeader>
             <CardContent className="p-2">
               <p className="text-3xl font-bold text-purple-600 text-center">{data.unpaidLeavesTaken}</p>
@@ -175,22 +180,15 @@ function EmployeeDashboard() {
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
             <CardHeader className="p-2">
               <CardTitle className="text-lg font-semibold text-teal-800 text-center">
-                Compensatory Leaves
+                Compensatory Leave
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-teal-600 text-center">{data.compensatoryLeaves.toFixed(1)} hrs</p>
-            </CardContent>
-          </Card>
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-green-800 text-center">
-                Overtime (Month)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <p className="text-3xl font-bold text-green-600 text-center">
-                {data.overtimeHours.toFixed(1)} hrs
+            <CardContent className="p-2 text-center">
+              <p className="text-xl font-bold text-teal-600">
+                {data.compensatoryLeaves} hrs
+              </p>
+              <p className="text-sm text-teal-600">
+                ({data.compensatoryAvailable.length} entries)
               </p>
             </CardContent>
           </Card>
@@ -234,6 +232,18 @@ function EmployeeDashboard() {
                   <Line type="monotone" dataKey="count" stroke="#82ca9d" />
                 </LineChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Unclaimed Overtime Records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OTTable
+                unclaimedOTRecords={data.unclaimedOTRecords}
+                claimedOTRecords={data.claimedOTRecords}
+                onClaimSuccess={fetchData}
+              />
             </CardContent>
           </Card>
           <Card>
@@ -297,6 +307,7 @@ function EmployeeDashboard() {
                       <TableHead className="font-semibold">Date</TableHead>
                       <TableHead className="font-semibold">Hours</TableHead>
                       <TableHead className="font-semibold">Project Details</TableHead>
+                      <TableHead className="font-semibold">Claim Type</TableHead>
                       <TableHead className="font-semibold">Status (HOD)</TableHead>
                       <TableHead className="font-semibold">Status (Admin)</TableHead>
                       <TableHead className="font-semibold">Status (CEO)</TableHead>
@@ -305,7 +316,7 @@ function EmployeeDashboard() {
                   <TableBody>
                     {data.otClaimRecords.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4">
+                        <TableCell colSpan={7} className="text-center py-4">
                           No overtime records found.
                         </TableCell>
                       </TableRow>
@@ -315,6 +326,7 @@ function EmployeeDashboard() {
                           <TableCell>{new Date(ot.date).toLocaleDateString()}</TableCell>
                           <TableCell>{ot.hours}</TableCell>
                           <TableCell>{ot.projectDetails}</TableCell>
+                          <TableCell>{ot.claimType || 'Compensatory'}</TableCell>
                           <TableCell>{ot.status.hod || 'Pending'}</TableCell>
                           <TableCell>{ot.status.admin || 'Pending'}</TableCell>
                           <TableCell>{ot.status.ceo || 'Pending'}</TableCell>

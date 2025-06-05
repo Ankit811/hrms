@@ -8,6 +8,7 @@ const cron = require('node-cron');
 const { gfsReady } = require('./utils/gridfs');
 const { syncAttendance } = require('./utils/syncAttendance');
 const { processLateArrivalsAndAbsents } = require('./utils/processAttendance');
+const { processUnclaimedOT } = require('./utils/processUnclaimedOT');
 
 dotenv.config();
 
@@ -95,6 +96,13 @@ mongoose.connect(process.env.MONGO_URI)
           console.log('Running processLateArrivalsAndAbsents at 9:30 AM...');
           await processLateArrivalsAndAbsents();
           console.log('processLateArrivalsAndAbsents at 9:30 AM completed.');
+        });
+
+        // Schedule processUnclaimedOT at 12:30 AM daily
+        cron.schedule('30 0 * * *', async () => {
+          console.log('Running processUnclaimedOT at 12:30 AM...');
+          await processUnclaimedOT();
+          console.log('processUnclaimedOT at 12:30 AM completed.');
         });
 
         const PORT = process.env.PORT || 5000;

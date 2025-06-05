@@ -3,9 +3,10 @@ const OTClaim = require('../models/OTClaim');
 const Employee = require('../models/Employee');
 const Notification = require('../models/Notification');
 const Audit = require('../models/Audit');
+const Attendance = require('../models/Attendance');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
-const Department = require('../models/Department'); // Ensure Department model is imported
+const Department = require('../models/Department');
 const router = express.Router();
 
 // Submit OT Claim
@@ -15,7 +16,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     if (!user) return res.status(404).json({ message: 'Employee not found' });
     if (!user.department) return res.status(400).json({ message: 'Employee department is required' });
 
-    const { date, hours, projectDetails } = req.body;
+    const { date, hours, projectDetails, claimType } = req.body;
     if (!date || !hours || !projectDetails) {
       return res.status(400).json({ message: 'Date, hours, and project details are required' });
     }
@@ -24,34 +25,77 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     if (isNaN(otDate.getTime())) return res.status(400).json({ message: 'Invalid date' });
     if (hours <= 0 || hours > 24) return res.status(400).json({ message: 'Hours must be between 0 and 24' });
 
-    // Check if OT date is a Sunday (non-working day)
-    if (otDate.getDay() !== 0) {
-      return res.status(400).json({ message: 'OT claims are only allowed for Sundays' });
+    // Normalize date for comparison
+    const normalizeDate = (d) => {
+      const date = new Date(d);
+      date.setHours(0, 0, 0, 0);
+      return date;
+    };
+    const normalizedOtDate = normalizeDate(otDate);
+    const now = new Date();
+    const claimDeadline = new Date(normalizedOtDate.getTime() + 24 * 60 * 60 * 1000);
+    claimDeadline.setHours(23, 59, 59, 999);
+
+    // Check if claim is within 24 hours
+    if (now > claimDeadline && user.department.name !== 'Production' && user.department.name !== 'Store' && user.department.name !== 'AMETL' && user.department.name !== 'Admin') {
+      return res.status(400).json({ message: 'OT claim must be submitted within 24 hours' });
     }
 
-    // Check department eligibility
-    const eligibleDepartments = ['IT', 'HR', 'Sales', 'Marketing', 'Accounts'];
+    // Validate OT hours against Attendance
+    const eligibleDepartments = ['Production', 'Store', 'AMETL', 'Admin'];
     const isEligible = eligibleDepartments.includes(user.department.name);
+    let attendanceRecord;
+    if (isEligible) {
+      attendanceRecord = await Attendance.findOne({
+        employeeId: user.employeeId,
+        logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate },
+        ot: { $gt: 0 }
+      });
+      if (!attendanceRecord) {
+        return res.status(400).json({ message: 'No OT recorded for this date' });
+      }
+      const recordedOtHours = attendanceRecord.ot / 60;
+      if (hours > recordedOtHours) {
+        return res.status(400).json({ message: `Claimed hours (${hours}) exceed recorded OT (${recordedOtHours.toFixed(1)})` });
+      }
+      if (recordedOtHours > 4 && !claimType) {
+        return res.status(400).json({ message: 'Claim type (Full/Partial) is required for OT > 4 hours' });
+      }
+      if (claimType === 'Partial' && hours !== recordedOtHours - (recordedOtHours >= 8 ? 8 : 4)) {
+        return res.status(400).json({ message: `Partial claim must be for ${recordedOtHours - (recordedOtHours >= 8 ? 8 : 4)} hours` });
+      }
+    } else {
+      // Non-eligible departments: only Sundays
+      if (otDate.getDay() !== 0) {
+        return res.status(400).json({ message: 'OT claims for non-eligible departments are only allowed for Sundays' });
+      }
+      attendanceRecord = await Attendance.findOne({
+        employeeId: user.employeeId,
+        logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate }
+      });
+      if (!attendanceRecord) {
+        return res.status(400).json({ message: 'No attendance recorded for this date' });
+      }
+      const recordedOtHours = attendanceRecord.ot / 60;
+      if (hours > recordedOtHours) {
+        return res.status(400).json({ message: `Claimed hours (${hours}) exceed recorded OT (${recordedOtHours.toFixed(1)})` });
+      }
+      if (hours < 4) {
+        return res.status(400).json({ message: 'Compensatory leave requires at least 4 hours' });
+      }
+    }
+
     let compensatoryHours = 0;
     let paymentAmount = 0;
-
     if (isEligible) {
-      compensatoryHours = hours; // 1 hour OT = 1 hour compensatory leave
-    } else {
-      const hourlyRate = 500; // Example rate, adjust as needed
-      paymentAmount = hours * hourlyRate * 1.5; // 1.5x hourly rate
-    }
-
-    // Check compensatory leave balance (for eligible departments)
-    if (isEligible) {
-      const totalCompensatoryHours = await OTClaim.aggregate([
-        { $match: { employeeId: user.employeeId, 'status.ceo': 'Approved' } },
-        { $group: { _id: null, total: { $sum: '$compensatoryHours' } } },
-      ]);
-      const currentBalance = totalCompensatoryHours[0]?.total || 0;
-      if (currentBalance + compensatoryHours > 40) {
-        return res.status(400).json({ message: 'Compensatory leave balance cannot exceed 40 hours' });
+      if (!claimType || claimType === 'Full') {
+        paymentAmount = hours * 500 * 1.5; // Example rate
+      } else if (claimType === 'Partial') {
+        paymentAmount = (hours - (attendanceRecord.ot >= 8 * 60 ? 8 : 4)) * 500 * 1.5;
+        compensatoryHours = attendanceRecord.ot >= 8 * 60 ? 8 : 4;
       }
+    } else {
+      compensatoryHours = hours >= 4 && hours < 8 ? 4 : hours >= 8 ? 8 : 0;
     }
 
     const status = {
@@ -77,6 +121,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       compensatoryHours,
       paymentAmount,
       status,
+      claimType: isEligible ? (claimType || 'Full') : null
     });
 
     await otClaim.save();
@@ -121,7 +166,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     const otClaim = await OTClaim.findById(req.params.id);
     if (!otClaim) return res.status(404).json({ message: 'OT claim not found' });
 
-    const user = await Employee.findOne({ employeeId: otClaim.employeeId });
+    const user = await Employee.findOne({ employeeId: otClaim.employeeId }).populate('department');
     if (!user) return res.status(404).json({ message: 'Employee not found' });
 
     let nextStage = '';
@@ -147,14 +192,25 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       otClaim.status.ceo = req.body.status;
       approverMessage = `Your OT claim for ${new Date(otClaim.date).toDateString()} was ${req.body.status.toLowerCase()} by CEO`;
       if (req.body.status === 'Approved') {
-        // Update employee compensatory leave balance or payment
-        const eligibleDepartments = ['Admin', 'AMETL', 'Testing', 'Production'];
-        const department = await Department.findById(otClaim.department);
-        if (eligibleDepartments.includes(department.name)) {
-          user.compensatoryLeaves = (user.compensatoryLeaves || 0) + otClaim.compensatoryHours;
-          await user.save();
+        const eligibleDepartments = ['Production', 'Store', 'AMETL', 'Admin'];
+        const isEligible = eligibleDepartments.includes(user.department.name);
+        if (isEligible) {
+          const attendance = await Attendance.findOne({
+            employeeId: user.employeeId,
+            logDate: { $gte: new Date(otClaim.date).setHours(0, 0, 0, 0), $lte: new Date(otClaim.date).setHours(23, 59, 59, 999) }
+          });
+          if (attendance) {
+            attendance.ot = 0; // Mark OT as claimed
+            await attendance.save();
+          }
+          if (otClaim.compensatoryHours > 0) {
+            await user.addCompensatoryLeave(otClaim.date, otClaim.compensatoryHours);
+          }
+        } else {
+          if (otClaim.compensatoryHours > 0) {
+            await user.addCompensatoryLeave(otClaim.date, otClaim.compensatoryHours);
+          }
         }
-        // Payment processing for non-eligible departments can be handled separately
       }
     } else {
       return res.status(403).json({ message: 'Not authorized to approve this OT claim' });
@@ -165,9 +221,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     // Notify employee
     await Notification.create({ userId: user.employeeId, message: approverMessage });
     if (global._io) {
-      global._io.to(user.employeeId).emit('notification', {
-        message: approverMessage,
-      });
+      global._io.to(user.employeeId).emit('notification', { message: approverMessage });
     }
 
     if (nextStage) {
@@ -180,9 +234,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       if (nextApprover) {
         await Notification.create({ userId: nextApprover.employeeId, message: `New OT claim from ${otClaim.name} awaits your approval` });
         if (global._io) {
-          global._io.to(nextApprover.employeeId).emit('notification', {
-            message: `New OT claim from ${otClaim.name} awaits your approval`,
-          });
+          global._io.to(nextApprover.employeeId).emit('notification', { message: `New OT claim from ${otClaim.name} awaits your approval` });
         }
       }
     }
@@ -190,7 +242,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     await Audit.create({
       user: req.user.employeeId,
       action: `${req.body.status} OT Claim`,
-      details: `${req.body.status} OT claim for ${otClaim.name} on ${new Date(otClaim.date).toDateString()}`,
+      details: `${req.body.status} OT claim for ${otClaim.name} on ${new Date(otClaim.date).toDateString()}`
     });
 
     res.json(otClaim);

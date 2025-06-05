@@ -89,7 +89,12 @@ const employeeSchema = new mongoose.Schema({
   paternityClaims: { type: Number, default: 0 }, // Tracks Paternity leave claims (max 2)
   restrictedHolidays: { type: Number, default: 1 }, // Tracks Restricted Holiday (1 per year)
   unpaidLeavesTaken: { type: Number, default: 0 },
-  compensatoryLeaves: { type: Number, default: 0 }, // Tracks compensatory leave hours
+  compensatoryLeaves: { type: Number, default: 0 }, // Tracks total compensatory leave hours
+  compensatoryAvailable: [{
+    date: { type: Date, required: true },
+    hours: { type: Number, enum: [4, 8], required: true },
+    status: { type: String, enum: ['Available', 'Claimed'], default: 'Available' }
+  }],
   lastCompensatoryReset: { type: Date }, // Tracks last reset for expiration
   lastLeaveReset: { type: Date }, // For Casual leaves (Confirmed)
   lastMonthlyReset: { type: Date }, // For Casual leaves (Non-Confirmed)
@@ -271,12 +276,26 @@ employeeSchema.methods.deductRestrictedHolidays = async function() {
   await this.save();
 };
 
-// Method to deduct compensatory leaves
-employeeSchema.methods.deductCompensatoryLeaves = async function(hours) {
-  if (this.compensatoryLeaves < hours) {
-    throw new Error('Insufficient compensatory leave balance');
+// Method to add compensatory leave entry
+employeeSchema.methods.addCompensatoryLeave = async function(date, hours) {
+  if (![4, 8].includes(hours)) {
+    throw new Error('Compensatory leave must be 4 or 8 hours');
   }
-  this.compensatoryLeaves = Math.max(0, this.compensatoryLeaves - hours);
+  this.compensatoryAvailable.push({ date, hours, status: 'Available' });
+  this.compensatoryLeaves = (this.compensatoryLeaves || 0) + hours;
+  await this.save();
+};
+
+// Method to deduct compensatory leaves
+employeeSchema.methods.deductCompensatoryLeaves = async function(entryId) {
+  const entry = this.compensatoryAvailable.find(e => e._id.toString() === entryId && e.status === 'Available');
+  if (!entry) {
+    throw new Error('Invalid or already claimed compensatory leave entry');
+  }
+  entry.status = 'Claimed';
+  this.compensatoryLeaves = Math.max(0, this.compensatoryLeaves - entry.hours);
+  const days = entry.hours === 4 ? 0.5 : 1;
+  this.paidLeaves = (this.paidLeaves || 0) + days;
   await this.save();
 };
 
