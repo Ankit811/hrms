@@ -1,9 +1,10 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
-const OT = require('../models/OTClaim'); // OTClaim model
-const Department = require('../models/Department'); // Added for department eligibility
+const OT = require('../models/OTClaim');
+const Department = require('../models/Department');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
@@ -16,7 +17,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
 
     if (loginType === 'HOD') {
       const hod = await Employee.findOne({ employeeId }).select('department');
-      if (!hod?.department?._id) {
+      if (!hod || !hod.department || !hod.department._id) {
         return res.status(400).json({ message: 'HOD department not found' });
       }
       departmentId = hod.department._id;
@@ -81,7 +82,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
     if (loginType === 'Admin') {
       leaveMatch = {
         'status.admin': 'Pending',
-        'employee': { $nin: await Employee.find({ loginType: 'Admin' }).select('_id') }
+        employee: { $nin: await Employee.find({ loginType: 'Admin' }).select('_id') }
       };
     } else if (loginType === 'CEO') {
       leaveMatch = { 'status.ceo': 'Pending' };
@@ -89,7 +90,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       leaveMatch = {
         'status.hod': 'Pending',
         department: departmentId,
-        'employee': { $nin: await Employee.find({ loginType: { $in: ['HOD', 'Admin'] } }).select('_id') }
+        employee: { $nin: await Employee.find({ loginType: { $in: ['HOD', 'Admin'] } }).select('_id') }
       };
     }
     const pendingLeaves = await Leave.countDocuments(leaveMatch);
@@ -115,7 +116,9 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
 router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
   try {
     const { employeeId } = req.user;
-    const employee = await Employee.findOne({ employeeId }).select('employeeType paidLeaves restrictedHolidays compensatoryLeaves');
+    const employee = await Employee.findOne({ employeeId })
+      .select('employeeType paidLeaves restrictedHolidays compensatoryLeaves department')
+      .populate('department', 'name');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
@@ -124,12 +127,14 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
       paidLeaves: employee.paidLeaves,
       restrictedHolidays: employee.restrictedHolidays,
       compensatoryLeaves: employee.compensatoryLeaves,
+      department: employee.department ? employee.department.name : null,
     });
     res.json({
       employeeType: employee.employeeType,
       paidLeaves: employee.paidLeaves,
       restrictedHolidays: employee.restrictedHolidays,
       compensatoryLeaves: employee.compensatoryLeaves,
+      department: employee.department,
     });
   } catch (err) {
     console.error('Error fetching employee info:', err);
@@ -170,14 +175,14 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     if (attendanceView === 'daily') {
       const date = new Date(fromDate);
       const count = attendanceRecords.filter(
-        (a) => new Date(a.logDate).toDateString() === date.toDateString()
+        a => new Date(a.logDate).toDateString() === date.toDateString()
       ).length;
       attendanceData = [{ name: date.toLocaleDateString(), count }];
     } else if (attendanceView === 'monthly') {
       attendanceData = Array.from({ length: endOfMonth.getDate() }, (_, i) => {
         const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
         const count = attendanceRecords.filter(
-          (a) => new Date(a.logDate).toDateString() === date.toDateString()
+          a => new Date(a.logDate).toDateString() === date.toDateString()
         ).length;
         return { name: `${i + 1}`, count };
       });
@@ -185,9 +190,8 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       attendanceData = Array.from({ length: 12 }, (_, i) => {
         const month = new Date(today.getFullYear(), i, 1);
         const count = attendanceRecords.filter(
-          (a) =>
-            new Date(a.logDate).getMonth() === i &&
-            new Date(a.logDate).getFullYear() === today.getFullYear()
+          a => new Date(a.logDate).getMonth() === i &&
+              new Date(a.logDate).getFullYear() === today.getFullYear()
         ).length;
         return { name: month.toLocaleString('default', { month: 'short' }), count };
       });
@@ -238,15 +242,15 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       })));
 
       const calculateDays = (leave) => {
-        if (leave.halfDay?.date) {
-          if (leave.fullDay?.from || leave.fullDay?.to) {
+        if (leave.halfDay && leave.halfDay.date) {
+          if (leave.fullDay && (leave.fullDay.from || leave.fullDay.to)) {
             console.warn(`Leave ${leave._id} has both halfDay and fullDay for ${employeeId}`);
             return 0.5; // Prioritize half-day
           }
           console.log(`Leave ${leave._id}: 0.5 days (half-day)`);
           return 0.5;
         }
-        if (leave.fullDay?.from && leave.fullDay?.to) {
+        if (leave.fullDay && leave.fullDay.from && leave.fullDay.to) {
           const from = normalizeDate(leave.fullDay.from);
           const to = normalizeDate(leave.fullDay.to);
           if (from > to) {
@@ -263,7 +267,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
 
       const seenRanges = new Set();
       const deduplicatedLeaves = leavesThisMonth.filter(leave => {
-        if (leave.fullDay?.from && leave.fullDay.to) {
+        if (leave.fullDay && leave.fullDay.from && leave.fullDay.to) {
           const rangeKey = `${normalizeDate(leave.fullDay.from).toISOString()}-${normalizeDate(leave.fullDay.to).toISOString()}`;
           if (seenRanges.has(rangeKey)) {
             console.warn(`Duplicate leave ${leave._id} with range ${rangeKey}`);
@@ -292,10 +296,10 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     };
     const unpaidLeavesRecords = await Leave.find(unpaidLeavesQuery);
     const unpaidLeavesTaken = unpaidLeavesRecords.reduce((total, leave) => {
-      if (leave.halfDay?.date) {
+      if (leave.halfDay && leave.halfDay.date) {
         return total + 0.5;
       }
-      if (leave.fullDay?.from && leave.fullDay?.to) {
+      if (leave.fullDay && leave.fullDay.from && leave.fullDay.to) {
         const from = normalizeDate(leave.fullDay.from);
         const to = normalizeDate(leave.fullDay.to);
         const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
@@ -319,7 +323,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // New: Fetch unclaimed and claimed OT entries from Attendance
+    // Fetch unclaimed and claimed OT entries from Attendance for eligible departments
     const eligibleDepartments = ['Production', 'Store', 'AMETL', 'Admin'];
     const isEligible = employee.department && eligibleDepartments.includes(employee.department.name);
 
@@ -378,7 +382,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       }));
     }
 
-    // New: Fetch compensatory leave entries
+    // Fetch compensatory leave entries
     const compensatoryLeaveEntries = employee.compensatoryAvailable
       ? employee.compensatoryAvailable
           .filter((entry) => entry.status === 'Available')
@@ -395,9 +399,9 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       unpaidLeavesTaken,
       overtimeHours,
       otClaimRecords,
-      unclaimedOTRecords, // New: For OT table
-      claimedOTRecords, // New: For OT table
-      compensatoryLeaveEntries, // New: For Leave form
+      unclaimedOTRecords,
+      claimedOTRecords,
+      compensatoryLeaveEntries,
     };
 
     console.log(`Employee dashboard stats for ${employeeId}:`, stats);

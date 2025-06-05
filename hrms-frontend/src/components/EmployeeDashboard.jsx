@@ -29,10 +29,11 @@ function EmployeeDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [socket, setSocket] = useState(null);
+  const [isEligible, setIsEligible] = useState(false);
 
   useEffect(() => {
     if (user?.employeeId) {
-      const socketInstance = io(import.meta.env.VITE_APP_API_URL || 'http://localhost:5000d', {
+      const socketInstance = io(import.meta.env.VITE_APP_API_URL || 'http://localhost:5000', {
         query: { employeeId: user.employeeId },
         transports: ['websocket', 'polling'],
         withCredentials: true,
@@ -66,7 +67,12 @@ function EmployeeDashboard() {
 
       // Fetch employee info
       const employeeRes = await api.get('/dashboard/employee-info');
-      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, compensatoryAvailable } = employeeRes.data;
+      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, department } = employeeRes.data;
+
+      // Determine OT eligibility
+      const eligibleDepartments = ['Production', 'Store', 'AMETL', 'Admin'];
+      const isDeptEligible = department && department.name && eligibleDepartments.includes(department.name);
+      setIsEligible(isDeptEligible);
 
       // Fetch stats
       const today = new Date();
@@ -100,7 +106,7 @@ function EmployeeDashboard() {
         overtimeHours: statsRes.data.overtimeHours,
         restrictedHolidays: restrictedHolidays,
         compensatoryLeaves: compensatoryLeaves,
-        compensatoryAvailable: compensatoryAvailable || [],
+        compensatoryAvailable: statsRes.data.compensatoryLeaveEntries || [],
         otClaimRecords: statsRes.data.otClaimRecords || [],
         unclaimedOTRecords: statsRes.data.unclaimedOTRecords || [],
         claimedOTRecords: statsRes.data.claimedOTRecords || [],
@@ -171,7 +177,7 @@ function EmployeeDashboard() {
             <CardHeader className="p-2">
               <CardTitle className="text-lg font-semibold text-purple-800 text-center">
                 Unpaid Leaves Taken (Month)
-                </CardTitle>
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-2">
               <p className="text-3xl font-bold text-purple-600 text-center">{data.unpaidLeavesTaken}</p>
@@ -234,18 +240,20 @@ function EmployeeDashboard() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Unclaimed Overtime Records</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <OTTable
-                unclaimedOTRecords={data.unclaimedOTRecords}
-                claimedOTRecords={data.claimedOTRecords}
-                onClaimSuccess={fetchData}
-              />
-            </CardContent>
-          </Card>
+          {isEligible && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Unclaimed Overtime Records</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <OTTable
+                  unclaimedOTRecords={data.unclaimedOTRecords}
+                  claimedOTRecords={data.claimedOTRecords}
+                  onClaimSuccess={fetchData}
+                />
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Leave Application Records</CardTitle>
@@ -295,49 +303,51 @@ function EmployeeDashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Overtime Claim Records</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table className="min-w-full">
-                  <TableHeader>
-                    <TableRow className="border-b">
-                      <TableHead className="font-semibold">Date</TableHead>
-                      <TableHead className="font-semibold">Hours</TableHead>
-                      <TableHead className="font-semibold">Project Details</TableHead>
-                      <TableHead className="font-semibold">Claim Type</TableHead>
-                      <TableHead className="font-semibold">Status (HOD)</TableHead>
-                      <TableHead className="font-semibold">Status (Admin)</TableHead>
-                      <TableHead className="font-semibold">Status (CEO)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.otClaimRecords.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-4">
-                          No overtime records found.
-                        </TableCell>
+          {isEligible && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Overtime Claim Records</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow className="border-b">
+                        <TableHead className="font-semibold">Date</TableHead>
+                        <TableHead className="font-semibold">Hours</TableHead>
+                        <TableHead className="font-semibold">Project Details</TableHead>
+                        <TableHead className="font-semibold">Claim Type</TableHead>
+                        <TableHead className="font-semibold">Status (HOD)</TableHead>
+                        <TableHead className="font-semibold">Status (Admin)</TableHead>
+                        <TableHead className="font-semibold">Status (CEO)</TableHead>
                       </TableRow>
-                    ) : (
-                      data.otClaimRecords.map((ot) => (
-                        <TableRow key={ot._id} className="hover:bg-gray-50">
-                          <TableCell>{new Date(ot.date).toLocaleDateString()}</TableCell>
-                          <TableCell>{ot.hours}</TableCell>
-                          <TableCell>{ot.projectDetails}</TableCell>
-                          <TableCell>{ot.claimType || 'Compensatory'}</TableCell>
-                          <TableCell>{ot.status.hod || 'Pending'}</TableCell>
-                          <TableCell>{ot.status.admin || 'Pending'}</TableCell>
-                          <TableCell>{ot.status.ceo || 'Pending'}</TableCell>
+                    </TableHeader>
+                    <TableBody>
+                      {data.otClaimRecords.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-4">
+                            No overtime records found.
+                          </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                      ) : (
+                        data.otClaimRecords.map((ot) => (
+                          <TableRow key={ot._id} className="hover:bg-gray-50">
+                            <TableCell>{new Date(ot.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{ot.hours}</TableCell>
+                            <TableCell>{ot.projectDetails}</TableCell>
+                            <TableCell>{ot.claimType || 'Compensatory'}</TableCell>
+                            <TableCell>{ot.status.hod || 'Pending'}</TableCell>
+                            <TableCell>{ot.status.admin || 'Pending'}</TableCell>
+                            <TableCell>{ot.status.ceo || 'Pending'}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </ContentLayout>
