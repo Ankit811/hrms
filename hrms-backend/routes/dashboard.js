@@ -4,6 +4,7 @@ const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
 const OT = require('../models/OTClaim');
+const OD = require('../models/OD');
 const Department = require('../models/Department');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
@@ -81,11 +82,17 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
     let leaveMatch = {};
     if (loginType === 'Admin') {
       leaveMatch = {
+        'status.hod': 'Approved',
         'status.admin': 'Pending',
+        'status.ceo': { $ne: 'Rejected' },
         employee: { $nin: await Employee.find({ loginType: 'Admin' }).select('_id') }
       };
     } else if (loginType === 'CEO') {
-      leaveMatch = { 'status.ceo': 'Pending' };
+      leaveMatch = {
+        'status.hod': 'Approved',
+        'status.admin': 'Approved',
+        'status.ceo': 'Pending',
+      };
     } else if (loginType === 'HOD') {
       leaveMatch = {
         'status.hod': 'Pending',
@@ -359,13 +366,19 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           const isClaimed = otClaims.some((claim) => normalizeOTDate(claim.date) === recordDate);
           return !isClaimed;
         })
-        .map((record) => ({
-          _id: record._id,
-          date: record.logDate,
-          hours: (record.ot / 60).toFixed(1), // Convert minutes to hours
-          day: new Date(record.logDate).toLocaleString('en-US', { weekday: 'long' }),
-          claimDeadline: new Date(record.logDate.getTime() + 24 * 60 * 60 * 1000), // 24 hours from OT date
-        }));
+        .map((record) => {
+          const deadline = new Date(record.logDate);
+          deadline.setDate(deadline.getDate() + 1);
+          deadline.setHours(23, 59, 59, 999); // 11:59:59 PM of next day
+
+          return {
+            _id: record._id,
+            date: record.logDate,
+            hours: (record.ot / 60).toFixed(1), // Convert minutes to hours
+            day: new Date(record.logDate).toLocaleString('en-US', { weekday: 'long' }),
+            claimDeadline: deadline,
+          };
+        });
 
       claimedOTRecords = otClaims.map((claim) => ({
         _id: claim._id,
@@ -393,6 +406,12 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           }))
       : [];
 
+    // Fetch OD records
+    const odRecords = await OD.find({ employeeId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
     const stats = {
       attendanceData,
       leaveRecords,
@@ -402,6 +421,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       unclaimedOTRecords,
       claimedOTRecords,
       compensatoryLeaveEntries,
+      odRecords, // Added OD records to response
     };
 
     console.log(`Employee dashboard stats for ${employeeId}:`, stats);

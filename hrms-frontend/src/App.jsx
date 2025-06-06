@@ -6,6 +6,7 @@ import Admin from './pages/Admin';
 import CEO from './pages/CEO';
 import HOD from './pages/HOD';
 import Employee from './pages/Employee';
+import { Toaster } from './components/ui/toaster';
 
 function App() {
   const { user, loading } = useContext(AuthContext);
@@ -19,6 +20,8 @@ function App() {
   if (loading) {
     return <div>Loading authentication state...</div>;
   }
+
+  <Toaster />
 
   return (
     <Routes>

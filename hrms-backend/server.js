@@ -58,6 +58,7 @@ const attendanceRoutes = require('./routes/attendance');
 const leaveRoutes = require('./routes/leaves');
 const notificationRoutes = require('./routes/notifications');
 const otRouter = require('./routes/ot');
+const odRouter = require('./routes/od');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -67,6 +68,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ot', otRouter);
+app.use('/api/od', odRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
@@ -99,8 +101,8 @@ mongoose.connect(process.env.MONGO_URI)
         });
 
         // Schedule processUnclaimedOT at 12:30 AM daily
-        cron.schedule('30 0 * * *', async () => {
-          console.log('Running processUnclaimedOT at 12:30 AM...');
+        cron.schedule('35 9 * * *', async () => {
+          console.log('Running processUnclaimedOT at 12:30 AM... for the timing at 9:30 AM');
           await processUnclaimedOT();
           console.log('processUnclaimedOT at 12:30 AM completed.');
         });

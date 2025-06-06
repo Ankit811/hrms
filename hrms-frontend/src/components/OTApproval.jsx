@@ -313,7 +313,7 @@ function OTApproval() {
                 </DialogHeader>
                 {selectedClaim && (
                   <div className="space-y-3">
-                    <p><strong>Employee:</strong> {selectedClaim.employeeId}</p>
+                    <p><strong>Employee:</strong> {selectedClaim.name}</p>
                     <p><strong>Date:</strong> {new Date(selectedClaim.date).toLocaleDateString()}</p>
                     <p><strong>Hours:</strong> {selectedClaim.hours}</p>
                     <p><strong>Claim Type:</strong> {selectedClaim.claimType || 'N/A'}</p>

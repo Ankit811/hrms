@@ -24,6 +24,7 @@ function EmployeeDashboard() {
     otClaimRecords: [],
     unclaimedOTRecords: [],
     claimedOTRecords: [],
+    odRecords: [],
   });
   const [attendanceView, setAttendanceView] = useState('daily');
   const [loading, setLoading] = useState(true);
@@ -65,22 +66,24 @@ function EmployeeDashboard() {
       setLoading(true);
       setError(null);
 
-      // Fetch employee info
       const employeeRes = await api.get('/dashboard/employee-info');
       const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, department } = employeeRes.data;
 
-      // Determine OT eligibility
-      const eligibleDepartments = ['Production', 'Store', 'AMETL', 'Admin'];
+      const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
       const isDeptEligible = department && department.name && eligibleDepartments.includes(department.name);
       setIsEligible(isDeptEligible);
 
-      // Fetch stats
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const startOfYear = new Date(today.getFullYear(), 0, 1);
       const endOfYear = new Date(today.getFullYear(), 11, 31);
       let fromDate, toDate;
+
+      const otFromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      const otToDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      otToDate.setHours(23, 59, 59, 999);
+
       if (attendanceView === 'daily') {
         fromDate = new Date(today);
         toDate = new Date(today);
@@ -93,7 +96,7 @@ function EmployeeDashboard() {
         fromDate = startOfYear;
         toDate = endOfYear;
       }
-      const statsRes = await api.get(`/dashboard/employee-stats?attendanceView=${attendanceView}&fromDate=${fromDate.toISOString()}&toDate=${toDate.toISOString()}`);
+      const statsRes = await api.get(`/dashboard/employee-stats?attendanceView=${attendanceView}&fromDate=${otFromDate.toISOString()}&toDate=${otToDate.toISOString()}`);
 
       setData({
         attendanceData: statsRes.data.attendanceData,
@@ -110,6 +113,7 @@ function EmployeeDashboard() {
         otClaimRecords: statsRes.data.otClaimRecords || [],
         unclaimedOTRecords: statsRes.data.unclaimedOTRecords || [],
         claimedOTRecords: statsRes.data.claimedOTRecords || [],
+        odRecords: statsRes.data.odRecords || [],
       });
       console.log('Dashboard data:', {
         employee: employeeRes.data,
@@ -295,6 +299,49 @@ function EmployeeDashboard() {
                           <TableCell>{leave.status.hod || 'Pending'}</TableCell>
                           <TableCell>{leave.status.admin || 'Pending'}</TableCell>
                           <TableCell>{leave.status.ceo || 'Pending'}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>OD Records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table className="min-w-full">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="font-semibold">Date Out</TableHead>
+                      <TableHead className="font-semibold">Date In</TableHead>
+                      <TableHead className="font-semibold">Purpose</TableHead>
+                      <TableHead className="font-semibold">Place/Unit</TableHead>
+                      <TableHead className="font-semibold">Status (HOD)</TableHead>
+                      <TableHead className="font-semibold">Status (Admin)</TableHead>
+                      <TableHead className="font-semibold">Status (CEO)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.odRecords.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-4">
+                          No OD records found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data.odRecords.map((od) => (
+                        <TableRow key={od._id} className="hover:bg-gray-50">
+                          <TableCell>{new Date(od.dateOut).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(od.dateIn).toLocaleDateString()}</TableCell>
+                          <TableCell>{od.purpose}</TableCell>
+                          <TableCell>{od.placeUnitVisit}</TableCell>
+                          <TableCell>{od.status.hod || 'Pending'}</TableCell>
+                          <TableCell>{od.status.admin || 'Pending'}</TableCell>
+                          <TableCell>{od.status.ceo || 'Pending'}</TableCell>
                         </TableRow>
                       ))
                     )}

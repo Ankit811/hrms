@@ -13,9 +13,8 @@ const syncAttendance = async () => {
     let fromDate;
 
     if (rawPunchlogCount === 0 || !syncMeta) {
-      // If RawPunchlog is empty or no sync metadata, fetch all punch logs
       console.log('RawPunchlog is empty or no sync metadata, fetching all punch logs');
-      fromDate = new Date('1970-01-01'); // Arbitrary early date to fetch all records
+      fromDate = new Date('1970-01-01');
       if (!syncMeta) {
         syncMeta = await SyncMetadata.create({ name: 'attendanceSync', lastSyncedAt: fromDate });
       }
@@ -67,7 +66,7 @@ const syncAttendance = async () => {
 
       return {
         UserID: log.UserID?.toString().trim(),
-        LogDate: new Date(log.LogDate),
+        LogDate: new Date(new Date(log.LogDate).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })),
         LogTime: logTime,
         Direction: (log.Direction || 'out').toLowerCase(),
         processed: false,
@@ -121,7 +120,7 @@ const syncAttendance = async () => {
         continue;
       }
 
-      const logDate = new Date(logs[0].LogDate);
+      const logDate = new Date(new Date(logs[0].LogDate).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
       logDate.setHours(0, 0, 0, 0);
 
       // Check if it's the current day
@@ -144,23 +143,21 @@ const syncAttendance = async () => {
       });
 
       if (leave && leave.halfDay.session === 'forenoon') {
-        // Forenoon leave: expect punch in afternoon
         const afternoonPunch = logs.find(log => log.LogTime >= '13:30:00');
         if (afternoonPunch) {
           timeIn = afternoonPunch.LogTime;
           status = 'Half Day';
           halfDay = 'Second Half';
         } else {
-          continue; // Skip if no afternoon punch
+          continue;
         }
       } else if (leave && leave.halfDay.session === 'afternoon') {
-        // Afternoon leave: expect punch in morning
         const morningPunch = logs.find(log => log.LogTime <= '13:30:00');
         if (morningPunch) {
           status = 'Half Day';
           halfDay = 'First Half';
         } else {
-          continue; // Skip if no morning punch
+          continue;
         }
       }
 
@@ -176,7 +173,6 @@ const syncAttendance = async () => {
         existingAttendance.halfDay = halfDay;
         existingAttendance.ot = 0; // Reset OT for current day
         if (!isCurrentDay) {
-          // For non-current days, set timeOut
           const lastPunch = logs[logs.length - 1];
           existingAttendance.timeOut = lastPunch.LogTime;
           if (firstPunch !== lastPunch && status === 'Present') {

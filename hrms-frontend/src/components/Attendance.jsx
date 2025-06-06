@@ -1,17 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
 import Pagination from './Pagination';
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "../components/ui/select";
+import { Label } from "../components/ui/label";
 
 function Attendance() {
+  const { user } = useContext(AuthContext);
   const [attendance, setAttendance] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [user, setUser] = useState(null);
   const [filters, setFilters] = useState({
     employeeId: '',
     departmentId: '',
-    fromDate: new Date().toISOString().split('T')[0], // Default to current date
-    toDate: new Date().toISOString().split('T')[0], // Default to current date
+    fromDate: new Date().toISOString().split('T')[0],
+    toDate: new Date().toISOString().split('T')[0],
+    status: 'all',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -19,28 +29,15 @@ function Attendance() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
-    fetchUser();
-    fetchDepartments();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (user && user.loginType === 'HOD' && user.department) {
+    if (user?.loginType === 'HOD' && user?.department) {
+      setDepartments([{ _id: user.department._id, name: user.department.name }]);
       setFilters((prev) => ({ ...prev, departmentId: user.department._id }));
-      fetchAttendance();
     } else {
-      fetchAttendance();
+      fetchDepartments();
     }
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchUser = async () => {
-    try {
-      const res = await api.get('/auth/me'); // Assuming an endpoint to get logged-in user details
-      setUser(res.data);
-    } catch (err) {
-      console.error('Error fetching user:', err);
-      setError('Failed to load user data');
-    }
-  };
+    fetchAttendance();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const fetchDepartments = async () => {
     try {
@@ -48,6 +45,7 @@ function Attendance() {
       setDepartments(res.data);
     } catch (err) {
       console.error('Error fetching departments:', err);
+      setError('Failed to load departments');
     }
   };
 
@@ -55,13 +53,7 @@ function Attendance() {
     setLoading(true);
     try {
       const res = await api.get('/attendance', { params: filters });
-      // Sort: Absent first, then Present/Half Day
-      const sortedAttendance = res.data.sort((a, b) => {
-        if (a.status === 'Absent' && b.status !== 'Absent') return -1;
-        if (a.status !== 'Absent' && b.status === 'Absent') return 1;
-        return 0;
-      });
-      setAttendance(sortedAttendance);
+      setAttendance(res.data);
       setError(null);
     } catch (err) {
       console.error('Error fetching attendance:', err);
@@ -71,14 +63,14 @@ function Attendance() {
     }
   };
 
-  const handleChange = (e) => {
-    setFilters({ ...filters, [e.target.name]: e.target.value });
+  const handleChange = (name, value) => {
+    setFilters({ ...filters, [name]: value });
   };
 
   const handleFilter = () => {
     const updatedFilters = { ...filters };
     if (filters.fromDate && !filters.toDate) {
-      updatedFilters.toDate = filters.fromDate; // Set toDate to fromDate for single-day filter
+      updatedFilters.toDate = filters.fromDate;
     }
     setFilters(updatedFilters);
     fetchAttendance();
@@ -117,7 +109,6 @@ function Attendance() {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
-  // Get department name for HOD
   const hodDepartmentName = user?.loginType === 'HOD' && user?.department
     ? departments.find(dep => dep._id === user.department._id)?.name || 'Unknown'
     : '';
@@ -125,13 +116,12 @@ function Attendance() {
   return (
     <ContentLayout title="Attendance List">
       <div className="w-full max-w-6xl mx-auto">
-        {/* Filter Section */}
         <div className="mb-6 flex flex-col md:flex-row gap-4">
           <input
             type="text"
             name="employeeId"
             value={filters.employeeId}
-            onChange={handleChange}
+            onChange={(e) => handleChange('employeeId', e.target.value)}
             placeholder="Employee ID"
             className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
           />
@@ -147,7 +137,7 @@ function Attendance() {
             <select
               name="departmentId"
               value={filters.departmentId}
-              onChange={handleChange}
+              onChange={(e) => handleChange('departmentId', e.target.value)}
               className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
             >
               <option value="">All Departments</option>
@@ -160,16 +150,37 @@ function Attendance() {
             type="date"
             name="fromDate"
             value={filters.fromDate}
-            onChange={handleChange}
+            onChange={(e) => handleChange('fromDate', e.target.value)}
             className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
           />
           <input
             type="date"
             name="toDate"
             value={filters.toDate}
-            onChange={handleChange}
+            onChange={(e) => handleChange('toDate', e.target.value)}
             className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
           />
+          <div className="flex-1 min-w-[200px]">
+            <Label htmlFor="status" className="text-sm font-medium text">
+              Status
+            </Label>
+            <Select
+              onValueChange={(value) => handleChange('status', value)}
+              value={filters.status}
+              aria-label="Select status filter"
+              disabled={loading}
+            >
+              <SelectTrigger id="status" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent className="z-50">
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="Present">Present</SelectItem>
+                <SelectItem value="Absent">Absent</SelectItem>
+                <SelectItem value="Half Day">Half Day</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex gap-2">
             <button onClick={handleFilter} className="px-4 py-2 border border-border rounded-md bg-background">
               Filter
@@ -177,7 +188,6 @@ function Attendance() {
           </div>
         </div>
 
-        {/* Table Section */}
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading...</p>
         ) : error ? (

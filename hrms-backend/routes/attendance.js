@@ -2,6 +2,7 @@ const express = require('express');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
 const Leave = require('../models/Leave');
+const OD = require('../models/OD');
 const Department = require('../models/Department');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
@@ -87,6 +88,7 @@ router.get('/download', auth, async (req, res) => {
       return map;
     }, {});
 
+    // Fetch approved leaves
     const leaves = await Leave.find({
       $or: [
         { 'fullDay.from': { $gte: filter.logDate?.$gte, $lte: filter.logDate?.$lte } },
@@ -95,6 +97,14 @@ router.get('/download', auth, async (req, res) => {
       'status.ceo': 'Approved',
     }).lean();
 
+    // Fetch approved ODs
+    const ods = await OD.find({
+      dateOut: { $lte: filter.logDate?.$lte },
+      dateIn: { $gte: filter.logDate?.$gte },
+      'status.ceo': 'Approved',
+    }).lean();
+
+    // Create leave map
     const leaveMap = {};
     leaves.forEach(leave => {
       const dateKey = leave.halfDay?.date
@@ -105,14 +115,29 @@ router.get('/download', auth, async (req, res) => {
       leaveMap[employeeKey][dateKey] = leave.halfDay ? `(L) ${leave.halfDay.session === 'forenoon' ? 'First Half' : 'Second Half'}` : '(L)';
     });
 
+    // Create OD map
+    const odMap = {};
+    ods.forEach(od => {
+      const startDate = new Date(od.dateOut);
+      const endDate = new Date(od.dateIn);
+      const employeeKey = od.employeeId;
+      if (!odMap[employeeKey]) odMap[employeeKey] = {};
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dateKey = d.toISOString().split('T')[0];
+        odMap[employeeKey][dateKey] = '(OD)';
+      }
+    });
+
     const data = attendance.map((record, index) => {
       const dateStr = new Date(record.logDate).toISOString().split('T')[0];
-      const leaveStatus = leaveMap[record.employeeId]?.[dateStr] || (record.status === 'Absent' ? '(A)' : '');
+      const leaveStatus = leaveMap[record.employeeId]?.[dateStr] || '';
+      const odStatus = odMap[record.employeeId]?.[dateStr] || '';
+      const status = leaveStatus || odStatus || (record.status === 'Absent' ? '(A)' : '');
       return {
         'Serial Number': index + 1,
         'Name of Employee': record.name,
         'Department': employeeMap[record.employeeId] || 'Unknown',
-        'Date': `${dateStr} ${leaveStatus}`,
+        'Date': `${dateStr} ${status}`,
         'Time In': record.timeIn || '-',
         'Time Out': record.timeOut || '-',
         'Status': record.status + (record.halfDay ? ` (${record.halfDay})` : ''),

@@ -3,7 +3,9 @@ import { Routes, Route } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Profile from '../components/Profile';
 import LeaveForm from '../components/LeaveForm';
-import MyDashboard from '../components/EmployeeDashboard'
+import ODForm from '../components/ODForm';
+import ODList from '../components/ODList';
+import MyDashboard from '../components/EmployeeDashboard';
 
 function Employee() {
   return (
@@ -12,8 +14,10 @@ function Employee() {
       <div className="flex-1 pt-16">
         <Routes>
           <Route path="profile" element={<Profile />} />
-          <Route path="employee-dashboard" element={<MyDashboard/>} />
+          <Route path="employee-dashboard" element={<MyDashboard />} />
           <Route path="leave" element={<LeaveForm />} />
+          <Route path="od" element={<ODForm />} />
+          <Route path="od-list" element={<ODList />} />
         </Routes>
       </div>
     </div>

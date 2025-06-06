@@ -40,7 +40,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await Employee.findOne({ email });
+    const user = await Employee.findOne({ email }).populate('department');
     console.log('Found user:', user);
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
@@ -55,7 +55,14 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     res.json({
       token,
-      user: { id: user._id, loginType: user.loginType, name: user.name, employeeId: user.employeeId },
+      user: {
+        id: user._id,
+        loginType: user.loginType,
+        name: user.name,
+        employeeId: user.employeeId,
+        email: user.email,
+        department: user.department ? { name: user.department.name } : null, // Include department name
+      },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -66,7 +73,9 @@ router.post('/login', loginLimiter, async (req, res) => {
 // GET /api/auth/me - Get authenticated employee's details
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await Employee.findById(req.user.id).select('-password');
+    const user = await Employee.findById(req.user.id)
+      .select('-password')
+      .populate('department'); // Populate department field
     if (!user) {
       return res.status(404).json({ message: 'Employee not found' });
     }
@@ -74,8 +83,9 @@ router.get('/me', authenticateToken, async (req, res) => {
       id: user._id,
       loginType: user.loginType,
       name: user.name,
-      email: user.email, // Added email field
+      email: user.email,
       employeeId: user.employeeId,
+      department: user.department ? { name: user.department.name } : null, // Include department name
     });
   } catch (err) {
     console.error('Error fetching user:', err);
