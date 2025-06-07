@@ -82,21 +82,19 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
     let leaveMatch = {};
     if (loginType === 'Admin') {
       leaveMatch = {
-        'status.hod': 'Approved',
+        'status.ceo': 'Approved',
         'status.admin': 'Pending',
-        'status.ceo': { $ne: 'Rejected' },
         employee: { $nin: await Employee.find({ loginType: 'Admin' }).select('_id') }
       };
     } else if (loginType === 'CEO') {
       leaveMatch = {
         'status.hod': 'Approved',
-        'status.admin': 'Approved',
         'status.ceo': 'Pending',
       };
     } else if (loginType === 'HOD') {
       leaveMatch = {
         'status.hod': 'Pending',
-        department: departmentId,
+        departmentId,
         employee: { $nin: await Employee.find({ loginType: { $in: ['HOD', 'Admin'] } }).select('_id') }
       };
     }

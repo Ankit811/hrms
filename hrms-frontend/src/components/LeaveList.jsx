@@ -127,9 +127,13 @@ function LeaveList() {
       const updatedLeaves = leaves.map(l => {
         if (l._id === id) {
           const newStatus = { ...l.status, [currentStage]: status };
+          // Update the next stage based on the current stage and status
           if (status === 'Approved') {
-            if (currentStage === 'hod') newStatus.admin = 'Pending';
-            else if (currentStage === 'admin') newStatus.ceo = 'Pending';
+            if (currentStage === 'hod') {
+              newStatus.ceo = 'Pending';
+            } else if (currentStage === 'ceo') {
+              newStatus.admin = 'Pending';
+            }
           }
           return { ...l, status: newStatus };
         }
@@ -178,7 +182,6 @@ function LeaveList() {
               {loading ? 'Loading...' : 'Refresh'}
             </Button>
           </div>
-          {/* Filters */}
           <div className="flex flex-wrap gap-4 mb-6">
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="leaveType" className="text-sm font-medium text">
@@ -267,8 +270,8 @@ function LeaveList() {
                   <TableHead className="font-semibold text">To</TableHead>
                   <TableHead className="font-semibold text">View</TableHead>
                   <TableHead className="font-semibold text">Status (HOD)</TableHead>
-                  <TableHead className="font-semibold text">Status (Admin)</TableHead>
                   <TableHead className="font-semibold text">Status (CEO)</TableHead>
+                  <TableHead className="font-semibold text">Status (Admin)</TableHead>
                   {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                     <TableHead className="font-semibold text">Action</TableHead>
                   )}
@@ -316,8 +319,8 @@ function LeaveList() {
                           </Button>
                         </TableCell>
                         <TableCell className="text">{leave.status.hod || 'Pending'}</TableCell>
-                        <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
                         <TableCell className="text">{leave.status.ceo || 'Pending'}</TableCell>
+                        <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
                         {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                           <TableCell>
                             {user.loginType === 'HOD' && leave.status.hod === 'Pending' && (
@@ -344,31 +347,7 @@ function LeaveList() {
                                 </Button>
                               </div>
                             )}
-                            {user.loginType === 'Admin' && leave.status.hod === 'Approved' && leave.status.admin === 'Pending' && (
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
-                                  disabled={loading || leave.status.admin !== 'Pending'}
-                                  aria-label={`Approve leave for ${leave.name}`}
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="bg-red-600 hover:bg-red-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
-                                  disabled={loading || leave.status.admin !== 'Pending'}
-                                  aria-label={`Reject leave for ${leave.name}`}
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
-                            {user.loginType === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending' && (
+                            {user.loginType === 'CEO' && leave.status.hod === 'Approved' && leave.status.ceo === 'Pending' && (
                               <div className="flex gap-2">
                                 <Button
                                   variant="default"
@@ -386,6 +365,30 @@ function LeaveList() {
                                   className="bg-red-600 hover:bg-red-700 text-white"
                                   onClick={() => handleApproval(leave._id, 'Rejected', 'ceo')}
                                   disabled={loading || leave.status.ceo !== 'Pending'}
+                                  aria-label={`Reject leave for ${leave.name}`}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                            {user.loginType === 'Admin' && leave.status.ceo === 'Approved' && leave.status.admin === 'Pending' && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
+                                  disabled={loading || leave.status.admin !== 'Pending'}
+                                  aria-label={`Approve leave for ${leave.name}`}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
+                                  disabled={loading || leave.status.admin !== 'Pending'}
                                   aria-label={`Reject leave for ${leave.name}`}
                                 >
                                   Reject

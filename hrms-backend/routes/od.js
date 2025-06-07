@@ -35,14 +35,11 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
     // Set status based on user role
     const status = {
-      hod: 'Pending',
-      admin: 'Pending',
-      ceo: 'Pending'
+      hod: req.user.role === 'Employee' ? 'Pending' : 'Approved',
+      ceo: 'Pending',
+      admin: 'Pending'
     };
-    if (req.user.role === 'Admin') {
-      status.hod = 'Approved';
-      status.admin = 'Approved';
-    } else if (req.user.role === 'HOD') {
+    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       status.hod = 'Approved';
     }
 
@@ -64,27 +61,17 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     await od.save();
 
     // Notify based on user role
-    if (req.user.role === 'Admin') {
+    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       const ceo = await Employee.findOne({ loginType: 'CEO' });
       if (ceo) {
         await Notification.create({ userId: ceo.employeeId, message: `New OD request from ${user.name}` });
         if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `New OD request from ${user.name}` });
       }
-    } else if (req.user.role === 'HOD') {
-      const admin = await Employee.findOne({ loginType: 'Admin' });
-      if (admin) {
-        await Notification.create({ userId: admin.employeeId, message: `New OD request from ${user.name}` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `New OD request from ${user.name}` });
-      }
     } else {
       const hod = await Employee.findOne({ department: user.department, loginType: 'HOD' });
-      const admin = await Employee.findOne({ loginType: 'Admin' });
       if (hod) {
         await Notification.create({ userId: hod.employeeId, message: `New OD request from ${user.name}` });
         if (global._io) global._io.to(hod.employeeId).emit('notification', { message: `New OD request from ${user.name}` });
-      } else if (admin) {
-        await Notification.create({ userId: admin.employeeId, message: `New OD request from ${user.name}` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `New OD request from ${user.name}` });
       }
     }
 
@@ -112,22 +99,22 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     if (req.user.role === 'HOD' && od.status.hod === 'Pending') {
       od.status.hod = req.body.status;
       if (req.body.status === 'Approved') {
-        nextStage = 'admin';
+        nextStage = 'ceo';
         approverMessage = `OD request from ${od.name} approved by HOD`;
       } else {
         approverMessage = `Your OD request was rejected by HOD`;
       }
-    } else if (req.user.role === 'Admin' && od.status.hod === 'Approved' && od.status.admin === 'Pending') {
-      od.status.admin = req.body.status;
-      if (req.body.status === 'Approved') {
-        nextStage = 'ceo';
-        approverMessage = `OD request from ${od.name} approved by Admin`;
-      } else {
-        approverMessage = `Your OD request was rejected by Admin`;
-      }
-    } else if (req.user.role === 'CEO' && od.status.admin === 'Approved' && od.status.ceo === 'Pending') {
+    } else if (req.user.role === 'CEO' && od.status.hod === 'Approved' && od.status.ceo === 'Pending') {
       od.status.ceo = req.body.status;
-      approverMessage = `Your OD request was ${req.body.status.toLowerCase()} by CEO`;
+      if (req.body.status === 'Approved') {
+        nextStage = user.loginType === 'Admin' ? '' : 'admin';
+        approverMessage = `OD request from ${od.name} approved by CEO`;
+      } else {
+        approverMessage = `Your OD request was rejected by CEO`;
+      }
+    } else if (req.user.role === 'Admin' && od.status.ceo === 'Approved' && od.status.admin === 'Pending') {
+      od.status.admin = req.body.status;
+      approverMessage = `Your OD request was ${req.body.status.toLowerCase()} by Admin`;
     } else {
       return res.status(403).json({ message: 'Not authorized to approve this OD request' });
     }
@@ -139,10 +126,10 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
 
     if (nextStage) {
       let nextApprover = null;
-      if (nextStage === 'admin') {
-        nextApprover = await Employee.findOne({ loginType: 'Admin' });
-      } else if (nextStage === 'ceo') {
+      if (nextStage === 'ceo') {
         nextApprover = await Employee.findOne({ loginType: 'CEO' });
+      } else if (nextStage === 'admin') {
+        nextApprover = await Employee.findOne({ loginType: 'Admin' });
       }
       if (nextApprover) {
         await Notification.create({ userId: nextApprover.employeeId, message: `New OD request from ${od.name}` });
@@ -176,16 +163,16 @@ router.get('/', auth, async (req, res) => {
       if (status && status !== 'all') {
         filter.$or = [
           { 'status.hod': status },
-          { 'status.admin': status },
-          { 'status.ceo': status }
+          { 'status.ceo': status },
+          { 'status.admin': status }
         ];
       }
     } else if (req.user.role === 'Admin' || req.user.role === 'CEO') {
       if (status && status !== 'all') {
         filter.$or = [
           { 'status.hod': status },
-          { 'status.admin': status },
-          { 'status.ceo': status }
+          { 'status.ceo': status },
+          { 'status.admin': status }
         ];
       }
     } else {
@@ -199,8 +186,8 @@ router.get('/', auth, async (req, res) => {
       }
       if (toDate) {
         const toDateEnd = new Date(toDate);
-        toDateEnd.setHours(23, 59, 59, 999);
-        dateConditions.push({ dateIn: { $lte: toDateEnd } });
+        toDateEnd.setHours(23, 59, 59, 999999);
+        dateConditions.push({ dateIn: toDateEnd });
       }
       if (dateConditions.length > 0) {
         filter.$and = dateConditions;

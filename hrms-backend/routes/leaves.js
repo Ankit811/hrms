@@ -47,7 +47,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     }
 
     // Custom Leave Type Validations
-    const leaveType = req.body.leaveType; // Avoid lowercase to match enum
+    const leaveType = req.body.leaveType;
     const isConfirmed = user.employeeType === 'Confirmed';
     const joinDate = new Date(user.dateOfJoining);
     const yearsOfService = (new Date() - joinDate) / (1000 * 60 * 60 * 24 * 365);
@@ -70,7 +70,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
         const medicalLeavesThisYear = await Leave.find({
           employeeId: user.employeeId,
           leaveType: 'Medical',
-          'status.ceo': 'Approved',
+          'status.admin': 'Approved', // Updated to check final approval
           $or: [
             { 'fullDay.from': { $gte: new Date(currentYear, 0, 1) } },
             { 'halfDay.date': { $gte: new Date(currentYear, 0, 1) } },
@@ -106,7 +106,6 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
           return res.status(400).json({ message: 'Cannot take more than 3 consecutive paid leave days.' });
         }
         if (!req.body.restrictedHoliday) return res.status(400).json({ message: 'Restricted holiday must be selected.' });
-        // Check for existing Restricted Holiday requests
         const existingRestrictedLeave = await Leave.findOne({
           employeeId: user.employeeId,
           leaveType: 'Restricted Holidays',
@@ -116,8 +115,8 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
           ],
           $or: [
             { 'status.hod': { $in: ['Pending', 'Approved'] } },
-            { 'status.admin': { $in: ['Pending', 'Approved'] } },
             { 'status.ceo': { $in: ['Pending', 'Approved'] } },
+            { 'status.admin': { $in: ['Pending', 'Approved'] } },
           ],
         });
         if (existingRestrictedLeave) {
@@ -145,14 +144,11 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
     // Set status based on user role
     const status = {
-      hod: 'Pending',
-      admin: 'Pending',
-      ceo: 'Pending'
+      hod: req.user.role === 'Employee' ? 'Pending' : 'Approved',
+      ceo: 'Pending',
+      admin: 'Pending'
     };
-    if (req.user.role === 'Admin') {
-      status.hod = 'Approved';
-      status.admin = 'Approved';
-    } else if (req.user.role === 'HOD') {
+    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       status.hod = 'Approved';
     }
 
@@ -168,7 +164,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       reason: req.body.reason,
       chargeGivenTo: req.body.chargeGivenTo,
       emergencyContact: req.body.emergencyContact,
-      compensatoryEntryId: req.body.compensatoryEntryId, // New field
+      compensatoryEntryId: req.body.compensatoryEntryId,
       projectDetails: req.body.projectDetails,
       restrictedHoliday: req.body.restrictedHoliday,
       status
@@ -177,27 +173,17 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     await leave.save();
 
     // Notify based on user role
-    if (req.user.role === 'Admin') {
+    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       const ceo = await Employee.findOne({ loginType: 'CEO' });
       if (ceo) {
         await Notification.create({ userId: ceo.employeeId, message: `New leave request from ${user.name}` });
         if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `New leave request from ${user.name}` });
       }
-    } else if (req.user.role === 'HOD') {
-      const admin = await Employee.findOne({ loginType: 'Admin' });
-      if (admin) {
-        await Notification.create({ userId: admin.employeeId, message: `New leave request from ${user.name}` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `New leave request from ${user.name}` });
-      }
     } else {
       const hod = await Employee.findOne({ department: user.department, loginType: 'HOD' });
-      const admin = await Employee.findOne({ loginType: 'Admin' });
       if (hod) {
         await Notification.create({ userId: hod.employeeId, message: `New leave request from ${user.name}` });
         if (global._io) global._io.to(hod.employeeId).emit('notification', { message: `New leave request from ${user.name}` });
-      } else if (admin) {
-        await Notification.create({ userId: admin.employeeId, message: `New leave request from ${user.name}` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `New leave request from ${user.name}` });
       }
     }
 
@@ -225,22 +211,22 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     if (req.user.role === 'HOD' && leave.status.hod === 'Pending') {
       leave.status.hod = req.body.status;
       if (req.body.status === 'Approved') {
-        nextStage = 'admin';
+        nextStage = 'ceo';
         approverMessage = `Leave request from ${leave.name} approved by HOD`;
       } else {
         approverMessage = `Your leave request was rejected by HOD`;
       }
-    } else if (req.user.role === 'Admin' && leave.status.hod === 'Approved' && leave.status.admin === 'Pending') {
-      leave.status.admin = req.body.status;
-      if (req.body.status === 'Approved') {
-        nextStage = 'ceo';
-        approverMessage = `Leave request from ${leave.name} approved by Admin`;
-      } else {
-        approverMessage = `Your leave request was rejected by Admin`;
-      }
-    } else if (req.user.role === 'CEO' && leave.status.admin === 'Approved' && leave.status.ceo === 'Pending') {
+    } else if (req.user.role === 'CEO' && leave.status.hod === 'Approved' && leave.status.ceo === 'Pending') {
       leave.status.ceo = req.body.status;
-      approverMessage = `Your leave request was ${req.body.status.toLowerCase()} by CEO`;
+      if (req.body.status === 'Approved') {
+        nextStage = user.loginType === 'Admin' ? '' : 'admin';
+        approverMessage = `Leave request from ${leave.name} approved by CEO`;
+      } else {
+        approverMessage = `Your leave request was rejected by CEO`;
+      }
+    } else if (req.user.role === 'Admin' && leave.status.ceo === 'Approved' && leave.status.admin === 'Pending') {
+      leave.status.admin = req.body.status;
+      approverMessage = `Your leave request was ${req.body.status.toLowerCase()} by Admin`;
       if (req.body.status === 'Approved') {
         let leaveStart, leaveEnd;
         if (leave.halfDay?.date) {
@@ -311,10 +297,10 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
 
     if (nextStage) {
       let nextApprover = null;
-      if (nextStage === 'admin') {
-        nextApprover = await Employee.findOne({ loginType: 'Admin' });
-      } else if (nextStage === 'ceo') {
+      if (nextStage === 'ceo') {
         nextApprover = await Employee.findOne({ loginType: 'CEO' });
+      } else if (nextStage === 'admin') {
+        nextApprover = await Employee.findOne({ loginType: 'Admin' });
       }
       if (nextApprover) {
         await Notification.create({ userId: nextApprover.employeeId, message: `New leave request from ${leave.name}` });
@@ -348,16 +334,16 @@ router.get('/', auth, async (req, res) => {
       if (status && status !== 'all') {
         filter.$or = [
           { 'status.hod': status },
-          { 'status.admin': status },
-          { 'status.ceo': status }
+          { 'status.ceo': status },
+          { 'status.admin': status }
         ];
       }
     } else if (req.user.role === 'Admin') {
       if (status && status !== 'all') {
         filter.$or = [
           { 'status.hod': status },
-          { 'status.admin': status },
-          { 'status.ceo': status }
+          { 'status.ceo': status },
+          { 'status.admin': status }
         ];
       } else {
         filter = {};
@@ -366,8 +352,8 @@ router.get('/', auth, async (req, res) => {
       if (status && status !== 'all') {
         filter.$or = [
           { 'status.hod': status },
-          { 'status.admin': status },
-          { 'status.ceo': status }
+          { 'status.ceo': status },
+          { 'status.admin': status }
         ];
       } else {
         filter = {};

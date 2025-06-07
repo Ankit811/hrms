@@ -271,8 +271,8 @@ function EmployeeDashboard() {
                       <TableHead className="font-semibold">From</TableHead>
                       <TableHead className="font-semibold">To</TableHead>
                       <TableHead className="font-semibold">Status (HOD)</TableHead>
-                      <TableHead className="font-semibold">Status (Admin)</TableHead>
                       <TableHead className="font-semibold">Status (CEO)</TableHead>
+                      <TableHead className="font-semibold">Status (Admin)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -297,8 +297,8 @@ function EmployeeDashboard() {
                               : 'N/A'}
                           </TableCell>
                           <TableCell>{leave.status.hod || 'Pending'}</TableCell>
-                          <TableCell>{leave.status.admin || 'Pending'}</TableCell>
                           <TableCell>{leave.status.ceo || 'Pending'}</TableCell>
+                          <TableCell>{leave.status.admin || 'Pending'}</TableCell>                        
                         </TableRow>
                       ))
                     )}
@@ -321,8 +321,8 @@ function EmployeeDashboard() {
                       <TableHead className="font-semibold">Purpose</TableHead>
                       <TableHead className="font-semibold">Place/Unit</TableHead>
                       <TableHead className="font-semibold">Status (HOD)</TableHead>
+                       <TableHead className="font-semibold">Status (CEO)</TableHead>
                       <TableHead className="font-semibold">Status (Admin)</TableHead>
-                      <TableHead className="font-semibold">Status (CEO)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -340,8 +340,8 @@ function EmployeeDashboard() {
                           <TableCell>{od.purpose}</TableCell>
                           <TableCell>{od.placeUnitVisit}</TableCell>
                           <TableCell>{od.status.hod || 'Pending'}</TableCell>
-                          <TableCell>{od.status.admin || 'Pending'}</TableCell>
                           <TableCell>{od.status.ceo || 'Pending'}</TableCell>
+                          <TableCell>{od.status.admin || 'Pending'}</TableCell>
                         </TableRow>
                       ))
                     )}
@@ -365,8 +365,8 @@ function EmployeeDashboard() {
                         <TableHead className="font-semibold">Project Details</TableHead>
                         <TableHead className="font-semibold">Claim Type</TableHead>
                         <TableHead className="font-semibold">Status (HOD)</TableHead>
-                        <TableHead className="font-semibold">Status (Admin)</TableHead>
                         <TableHead className="font-semibold">Status (CEO)</TableHead>
+                        <TableHead className="font-semibold">Status (Admin)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -384,8 +384,8 @@ function EmployeeDashboard() {
                             <TableCell>{ot.projectDetails}</TableCell>
                             <TableCell>{ot.claimType || 'Compensatory'}</TableCell>
                             <TableCell>{ot.status.hod || 'Pending'}</TableCell>
-                            <TableCell>{ot.status.admin || 'Pending'}</TableCell>
                             <TableCell>{ot.status.ceo || 'Pending'}</TableCell>
+                            <TableCell>{ot.status.admin || 'Pending'}</TableCell>
                           </TableRow>
                         ))
                       )}

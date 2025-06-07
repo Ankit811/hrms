@@ -48,8 +48,8 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     // Validate OT hours against Attendance
     const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
     const isEligible = eligibleDepartments
-    .map(d => d.toLowerCase())
-    .includes(employee.department?.name?.toLowerCase());
+      .map(d => d.toLowerCase())
+      .includes(employee.department?.name?.toLowerCase());
     let attendanceRecord;
     if (isEligible) {
       attendanceRecord = await Attendance.findOne({
@@ -76,7 +76,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       }
       attendanceRecord = await Attendance.findOne({
         employeeId: employee.employeeId,
-        logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate }
+        logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate },
       });
       if (!attendanceRecord) {
         return res.status(400).json({ error: 'No attendance recorded for this date' });
@@ -104,14 +104,11 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     }
 
     const status = {
-      hod: 'Pending',
+      hod: req.user.role === 'Employee' ? 'Pending' : 'Approved',
       admin: 'Pending',
       ceo: 'Pending',
     };
-    if (req.user.role === 'Admin') {
-      status.hod = 'Approved';
-      status.admin = 'Approved';
-    } else if (req.user.role === 'HOD') {
+    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       status.hod = 'Approved';
     }
 
@@ -131,31 +128,45 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
     await otClaim.save();
 
-    if (req.user.role === 'Admin') {
+    // Notify based on user role
+    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       const ceo = await Employee.findOne({ loginType: 'CEO' });
       if (ceo) {
-        await Notification.create({ userId: ceo.employeeId, message: `New OT claim from ${employee.name}` });
-        if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `New OT claim from ${employee.name}` });
-      }
-    } else if (req.user.role === 'HOD') {
-      const admin = await Employee.findOne({ loginType: 'Admin' });
-      if (admin) {
-        await Notification.create({ userId: admin.employeeId, message: `New OT claim from ${employee.name}` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `New OT claim from ${employee.name}` });
+        await Notification.create({
+          userId: ceo.employeeId,
+          message: `New OT claim from ${employee.name}`,
+        });
+        if (global._io)
+          global._io
+            .to(ceo.employeeId)
+            .emit('notification', {
+              message: `New OT claim from ${employee.name}`,
+            });
       }
     } else {
-      const hod = await Employee.findOne({ department: employee.department._id, loginType: 'HOD' });
-      const admin = await Employee.findOne({ loginType: 'Admin' });
+      const hod = await Employee.findOne({
+        department: employee.department._id,
+        loginType: 'HOD',
+      });
       if (hod) {
-        await Notification.create({ userId: hod.employeeId, message: `New OT claim from ${employee.name}` });
-        if (global._io) global._io.to(hod.employeeId).emit('notification', { message: `New OT claim from ${employee.name}` });
-      } else if (admin) {
-        await Notification.create({ userId: admin.employeeId, message: `New OT claim from ${employee.name}` });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `New OT claim from ${employee.name}` });
+        await Notification.create({
+          userId: hod.employeeId,
+          message: `New OT claim from ${employee.name}`,
+        });
+        if (global._io)
+          global._io
+            .to(hod.employeeId)
+            .emit('notification', {
+              message: `New OT claim from ${employee.name}`,
+            });
       }
     }
 
-    await Audit.create({ user: employee.employeeId, action: 'Submit OT Claim', details: `Submitted OT claim for ${hours} hours on ${otDate.toISOString()}` });
+    await Audit.create({
+      user: employee.employeeId,
+      action: 'Submit OT Claim',
+      details: `Submitted OT claim for ${hours} hours on ${otDate.toISOString()}`,
+    });
 
     res.status(201).json(otClaim);
   } catch (err) {
@@ -166,94 +177,135 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
 // Approve OT Claim
 router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res) => {
-  try {
-    const otClaim = await OTClaim.findById(req.params.id);
+    try {
+      const otClaim = await OTClaim.findById(req.params.id);
     if (!otClaim) return res.status(404).json({ error: 'OT claim not found' });
 
     const employee = await Employee.findOne({ employeeId: otClaim.employeeId }).populate('department');
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
-    let nextStage = '';
-    let approverMessage = '';
+      let nextStage = '';
+      let approverMessage = '';
 
-    if (req.user.role === 'HOD' && otClaim.status.hod === 'Pending') {
+      if (req.user.role === 'HOD' && otClaim.status.hod === 'Pending') {
       otClaim.status.hod = req.body.status;
-      if (req.body.status === 'Approved') {
-        nextStage = 'admin';
-        approverMessage = `OT claim from ${otClaim.name} approved by HOD`;
-      } else {
-        approverMessage = `Your OT claim for ${new Date(otClaim.date).toDateString()} was rejected by HOD`;
-      }
-    } else if (req.user.role === 'Admin' && otClaim.status.hod === 'Approved' && otClaim.status.admin === 'Pending') {
-      otClaim.status.admin = req.body.status;
-      if (req.body.status === 'Approved') {
-        nextStage = 'ceo';
-        approverMessage = `OT claim from ${otClaim.name} approved by Admin`;
-      } else {
-        approverMessage = `Your OT claim for ${new Date(otClaim.date).toDateString()} was rejected by Admin`;
-      }
-    } else if (req.user.role === 'CEO' && otClaim.status.admin === 'Approved' && otClaim.status.ceo === 'Pending') {
-      otClaim.status.ceo = req.body.status;
-      approverMessage = `Your OT claim for ${new Date(otClaim.date).toDateString()} was ${req.body.status.toLowerCase()} by CEO`;
-      if (req.body.status === 'Approved') {
-        const eligibleDepartments = ['Production', 'Electronics', 'AMETL', 'Admin'];
-        const isEligible = eligibleDepartments.includes(employee.department.departmentName);
-        if (isEligible) {
-          const attendance = await Attendance.findOne({
-            employeeId: employee.employeeId,
-            logDate: { $gte: new Date(otClaim.date).setHours(0, 0, 0, 0), $lte: new Date(otClaim.date).setHours(23, 59, 59, 999) }
-          });
-          if (attendance) {
-            attendance.ot = 0;
-            await attendance.save();
-          }
-          if (otClaim.compensatoryHours > 0) {
-            await employee.addCompensatoryLeave(otClaim.date, otClaim.compensatoryHours);
-          }
+        if (req.body.status === 'Approved') {
+          nextStage = 'ceo';
+          approverMessage = `OT claim from ${otClaim.name} approved by HOD`;
         } else {
-          if (otClaim.compensatoryHours > 0) {
-            await employee.addCompensatoryLeave(otClaim.date, otClaim.compensatoryHours);
+        approverMessage = `Your OT claim for ${new Date(otClaim.date).toDateString()} was rejected by HOD`;
+        }
+      } else if (
+        req.user.role === 'CEO' &&
+        otClaim.status.hod === 'Approved' &&
+        otClaim.status.ceo === 'Pending'
+      ) {
+        otClaim.status.ceo = req.body.status;
+        if (req.body.status === 'Approved') {
+          nextStage = employee.loginType === 'Admin' ? '' : 'admin';
+          approverMessage = `OT claim from ${otClaim.name} approved by CEO`;
+        } else {
+          approverMessage = `Your OT claim for ${new Date(
+            otClaim.date
+          ).toDateString()} was rejected by CEO`;
+        }
+      } else if (
+        req.user.role === 'Admin' &&
+        otClaim.status.ceo === 'Approved' &&
+        otClaim.status.admin === 'Pending'
+      ) {
+        otClaim.status.admin = req.body.status;
+        approverMessage = `Your OT claim for ${new Date(otClaim.date).toDateString()} was ${req.body.status.toLowerCase()} by Admin`;
+        if (req.body.status === 'Approved') {
+          const eligibleDepartments = [
+            'Production',
+            'Testing',
+            'AMETL',
+            'Admin',
+          ];
+          const isEligible = eligibleDepartments.includes(
+            employee.department.departmentName
+          );
+          if (isEligible) {
+            const attendance = await Attendance.findOne({
+              employeeId: employee.employeeId,
+              logDate: {
+                $gte: new Date(otClaim.date).setHours(0, 0, 0, 0),
+                $lte: new Date(otClaim.date).setHours(23, 59, 9999),
+              },
+            });
+            if (attendance) {
+              attendance.ot = 0;
+              await attendance.save();
+            }
+            if (otClaim.compensatoryHours > 0) {
+              await employee.addCompensatoryLeave(
+                otClaim.date,
+                otClaim.compensatoryHours
+              );
+            }
+          } else {
+            if (otClaim.compensatoryHours > 0) {
+              await employee.addCompensatoryLeave(
+                otClaim.date,
+                otClaim.compensatoryHours
+              );
+            }
+          }
+        }
+      } else {
+        return res
+          .status(403)
+          .json({ error: 'Not authorized to approve this OT claim' });
+      }
+
+      await otClaim.save();
+      await Notification.create({
+        userId: employee.employeeId,
+        message: approverMessage,
+      });
+      if (global._io) {
+        global._io
+          .to(employee.employeeId)
+          .emit('employeeId')
+          .emit('notification', { message: approverMessage });
+      }
+
+      if (nextStage) {
+        let nextApprover = null;
+        if (nextStage === 'ceo') {
+          nextApprover = await Employee.findOne({ loginType: 'CEO' });
+        } else if (nextStage === 'admin') {
+          nextApprover = await Employee.findOne({ loginType: 'Admin' });
+        } else if (nextApprover) {
+          await Notification.create({
+            userId: nextApprover.employeeId,
+            message: `New OT claim from ${otClaim.name} awaits your approval`,
+          });
+          if (global._io) {
+            global._io
+              .to(nextApprover.employeeId)
+              .emit('notification', {
+                message: `New OT claim from ${otClaim.name} awaits your approval`,
+              });
           }
         }
       }
-    } else {
-      return res.status(403).json({ error: 'Not authorized to approve this OT claim' });
+      await Audit.create({
+        user: req.user.employeeId,
+        action: `${req.body.status} OT Claim`,
+        details: `${req.body.status} OT claim for ${otClaim.name} on ${new Date(
+          otClaim.date
+        ).toDateString()})}`,
+      });
+
+      res.json(otClaim);
+    } catch (err) {
+      console.error('OT claim approval error:', err.stack);
+      res.status(500).json({ error: 'Server error', error: err.message });
     }
-
-    await otClaim.save();
-
-    await Notification.create({ userId: employee.employeeId, message: approverMessage });
-    if (global._io) {
-      global._io.to(employee.employeeId).emit('notification', { message: approverMessage });
-    }
-
-    if (nextStage) {
-      let nextApprover = null;
-      if (nextStage === 'admin') {
-        nextApprover = await Employee.findOne({ loginType: 'Admin' });
-      } else if (nextStage === 'ceo') {
-        nextApprover = await Employee.findOne({ loginType: 'CEO' });
-      }
-      if (nextApprover) {
-        await Notification.create({ userId: nextApprover.employeeId, message: `New OT claim from ${otClaim.name} awaits your approval` });
-        if (global._io) {
-          global._io.to(nextApprover.employeeId).emit('notification', { message: `New OT claim from ${otClaim.name} awaits your approval` });
-        }
-      }
-    }
-
-    await Audit.create({
-      user: req.user.employeeId,
-      action: `${req.body.status} OT Claim`,
-      details: `${req.body.status} OT claim for ${otClaim.name} on ${new Date(otClaim.date).toDateString()}`
-    });
-
-    res.json(otClaim);
-  } catch (err) {
-    console.error('OT claim approval error:', err.stack);
-    res.status(500).json({ error: 'Server error', error: err.message });
   }
-});
+);
 
 // Get OT Claims
 router.get('/', auth, async (req, res) => {
@@ -264,11 +316,20 @@ router.get('/', auth, async (req, res) => {
     if (req.user.role === 'Employee') {
       filter = { employeeId: req.user.employeeId };
     } else if (req.user.role === 'HOD') {
-      const hod = await Employee.findOne({ employeeId: req.user.employeeId }).populate('department');
-      if (!hod || !hod.department || !hod.department._id) {
-        return res.status(400).json({ error: 'HOD has no valid department assigned' });
+      const hod = await Employee.findOne({ employeeId: req.user.employeeId })
+        .populate('department')
+        .populate('employee.employeeId');
+      if (
+        !hod ||
+        !employeeId ||
+        !hod.department ||
+        !departmentId._id.department._id
+      ) {
+        return res
+          .status(400)
+          .json({ message: 'HOD approval has no valid department assigned' });
       }
-      filter = { department: hod.department._id };
+      filter = { departmentId: hod.department._id };
     } else if (req.user.role === 'Admin' || req.user.role === 'CEO') {
       filter = {};
     } else {
@@ -300,11 +361,10 @@ router.get('/', auth, async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Fetch unclaimed OT records
     const unclaimedOTRecords = await Attendance.find({
       employeeId: req.user.employeeId,
       ot: { $gt: 0 }, // Any OT
-      logDate: { $gte: new Date().setDate(new Date().getDate() - 7) }
+      logDate: { $gte: new Date().setDate(new Date().getDate() - 7) },
     }).lean();
 
     const unclaimedWithDeadline = unclaimedOTRecords.map(record => {

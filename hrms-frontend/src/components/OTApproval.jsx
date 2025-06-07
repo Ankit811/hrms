@@ -1,4 +1,3 @@
-// frontend/src/components/OTApproval.jsx
 import React, { useEffect, useState, useContext, useCallback } from 'react';
 import {
   Card,
@@ -92,10 +91,25 @@ function OTApproval() {
     fetchOtClaims(1, limit);
   };
 
-  const handleApproval = async (id, status) => {
+  const handleApproval = async (id, status, currentStage) => {
     try {
       await api.put(`/ot/${id}/approve`, { status });
-      await fetchOtClaims();
+      const updatedClaims = claims.map(claim => {
+        if (claim._id === id) {
+          const newStatus = { ...claim.status, [currentStage]: status };
+          // Update the next stage based on the current stage and status
+          if (status === 'Approved') {
+            if (currentStage === 'hod') {
+              newStatus.ceo = 'Pending';
+            } else if (currentStage === 'ceo') {
+              newStatus.admin = 'Pending';
+            }
+          }
+          return { ...claim, status: newStatus };
+        }
+        return claim;
+      });
+      setClaims(updatedClaims);
       alert(`OT claim ${status.toLowerCase()} successfully.`);
     } catch (err) {
       console.error('Approval error:', err);
@@ -185,8 +199,8 @@ function OTApproval() {
                   <TableHead className="font-semibold">Claim Type</TableHead>
                   <TableHead className="font-semibold">View</TableHead>
                   <TableHead className="font-semibold">Status (HOD)</TableHead>
-                  <TableHead className="font-semibold">Status (Admin)</TableHead>
                   <TableHead className="font-semibold">Status (CEO)</TableHead>
+                  <TableHead className="font-semibold">Status (Admin)</TableHead>
                   {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                     <TableHead className="font-semibold">Action</TableHead>
                   )}
@@ -195,13 +209,13 @@ function OTApproval() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-4">
+                    <TableCell colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8} className="text-center py-4">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : claims.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-4">
+                    <TableCell colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8} className="text-center py-4">
                       No OT claim records found.
                     </TableCell>
                   </TableRow>
@@ -222,9 +236,8 @@ function OTApproval() {
                         </Button>
                       </TableCell>
                       <TableCell>{claim.status.hod || 'Pending'}</TableCell>
-                      <TableCell>{claim.status.admin || 'Pending'}</TableCell>
                       <TableCell>{claim.status.ceo || 'Pending'}</TableCell>
-            
+                      <TableCell>{claim.status.admin || 'Pending'}</TableCell>
                       {['HOD', 'Admin', 'CEO'].includes(user.loginType) && (
                         <TableCell>
                           {user.loginType === 'HOD' && claim.status.hod === 'Pending' && (
@@ -232,56 +245,62 @@ function OTApproval() {
                               <Button
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Approved')}
-                                disabled={loading}
+                                onClick={() => handleApproval(claim._id, 'Approved', 'hod')}
+                                disabled={loading || claim.status.hod !== 'Pending'}
+                                aria-label={`Approve OT claim for ${claim.name}`}
                               >
                                 Approve
                               </Button>
                               <Button
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Rejected')}
-                                disabled={loading}
+                                onClick={() => handleApproval(claim._id, 'Rejected', 'hod')}
+                                disabled={loading || claim.status.hod !== 'Pending'}
+                                aria-label={`Reject OT claim for ${claim.name}`}
                               >
                                 Reject
                               </Button>
                             </div>
                           )}
-                          {user.loginType === 'Admin' && claim.status.hod === 'Approved' && claim.status.admin === 'Pending' && (
+                          {user.loginType === 'CEO' && claim.status.hod === 'Approved' && claim.status.ceo === 'Pending' && (
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Approved')}
-                                disabled={loading}
+                                onClick={() => handleApproval(claim._id, 'Approved', 'ceo')}
+                                disabled={loading || claim.status.ceo !== 'Pending'}
+                                aria-label={`Approve OT claim for ${claim.name}`}
                               >
                                 Approve
                               </Button>
                               <Button
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Rejected')}
-                                disabled={loading}
+                                onClick={() => handleApproval(claim._id, 'Rejected', 'ceo')}
+                                disabled={loading || claim.status.ceo !== 'Pending'}
+                                aria-label={`Reject OT claim for ${claim.name}`}
                               >
                                 Reject
                               </Button>
                             </div>
                           )}
-                          {user.loginType === 'CEO' && claim.status.admin === 'Approved' && claim.status.ceo === 'Pending' && (
+                          {user.loginType === 'Admin' && claim.status.ceo === 'Approved' && claim.status.admin === 'Pending' && (
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Approved')}
-                                disabled={loading}
+                                onClick={() => handleApproval(claim._id, 'Approved', 'admin')}
+                                disabled={loading || claim.status.admin !== 'Pending'}
+                                aria-label={`Approve OT claim for ${claim.name}`}
                               >
                                 Approve
                               </Button>
                               <Button
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Rejected')}
-                                disabled={loading}
+                                onClick={() => handleApproval(claim._id, 'Rejected', 'admin')}
+                                disabled={loading || claim.status.admin !== 'Pending'}
+                                aria-label={`Reject OT claim for ${claim.name}`}
                               >
                                 Reject
                               </Button>
@@ -296,14 +315,10 @@ function OTApproval() {
             </Table>
             <Pagination
               currentPage={page}
-              itemsPerPage={
-              limit}
-              totalItems={
-              total}
-              onPageChange={
-                handlePageChange}
-              onPageSizeChange={
-                handlePageSizeChange}
+              itemsPerPage={limit}
+              totalItems={total}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
             <Dialog open={!!selectedClaim} onOpenChange={() => setSelectedClaim(null)}>
               <DialogContent className="max-w-md">

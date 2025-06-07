@@ -160,27 +160,6 @@ function Attendance() {
             onChange={(e) => handleChange('toDate', e.target.value)}
             className="max-w-sm border border-border px-4 py-2 rounded-md bg-background text-foreground"
           />
-          <div className="flex-1 min-w-[200px]">
-            <Label htmlFor="status" className="text-sm font-medium text">
-              Status
-            </Label>
-            <Select
-              onValueChange={(value) => handleChange('status', value)}
-              value={filters.status}
-              aria-label="Select status filter"
-              disabled={loading}
-            >
-              <SelectTrigger id="status" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent className="z-50">
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Present">Present</SelectItem>
-                <SelectItem value="Absent">Absent</SelectItem>
-                <SelectItem value="Half Day">Half Day</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex gap-2">
             <button onClick={handleFilter} className="px-4 py-2 border border-border rounded-md bg-background">
               Filter

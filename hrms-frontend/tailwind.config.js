@@ -41,10 +41,10 @@ export default {
           DEFAULT: 'hsl(0, 0%, 97%)', // --accent: oklch(0.97 0 0)
           foreground: 'hsl(0, 0%, 20%)', // --accent-foreground: oklch(0.205 0 0)
         },
-        destructive: {
-          DEFAULT: 'hsl(24.2, 77.4%, 45.1%)', // --destructive: oklch(0.577 0.245 27.325)
-          foreground: 'hsl(24.2, 77.4%, 45.1%)', // --destructive-foreground: oklch(0.577 0.245 27.325)
-        },
+        // destructive: {
+        //   DEFAULT: 'hsl(24.2, 77.4%, 45.1%)', // --destructive: oklch(0.577 0.245 27.325)
+        //   foreground: 'hsl(24.2, 77.4%, 45.1%)', // --destructive-foreground: oklch(0.577 0.245 27.325)
+        // },
         border: 'hsl(0, 0%, 92.2%)', // --border: oklch(0.922 0 0)
         input: 'hsl(0, 0%, 92.2%)', // --input: oklch(0.922 0 0)
         ring: 'hsl(0, 0%, 70.8%)', // --ring: oklch(0.708 0 0)

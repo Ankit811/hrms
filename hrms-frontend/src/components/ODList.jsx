@@ -124,9 +124,13 @@ function ODList() {
       const updatedODs = odRecords.map(od => {
         if (od._id === id) {
           const newStatus = { ...od.status, [currentStage]: status };
+          // Update the next stage based on the current stage and status
           if (status === 'Approved') {
-            if (currentStage === 'hod') newStatus.admin = 'Pending';
-            else if (currentStage === 'admin') newStatus.ceo = 'Pending';
+            if (currentStage === 'hod') {
+              newStatus.ceo = 'Pending';
+            } else if (currentStage === 'ceo') {
+              newStatus.admin = 'Pending';
+            }
           }
           return { ...od, status: newStatus };
         }
@@ -235,8 +239,8 @@ function ODList() {
                   <TableHead className="font-semibold text">Place/Unit</TableHead>
                   <TableHead className="font-semibold text">View</TableHead>
                   <TableHead className="font-semibold text">Status (HOD)</TableHead>
-                  <TableHead className="font-semibold text">Status (Admin)</TableHead>
                   <TableHead className="font-semibold text">Status (CEO)</TableHead>
+                  <TableHead className="font-semibold text">Status (Admin)</TableHead>
                   {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                     <TableHead className="font-semibold text">Action</TableHead>
                   )}
@@ -279,8 +283,8 @@ function ODList() {
                         </Button>
                       </TableCell>
                       <TableCell className="text">{od.status.hod || 'Pending'}</TableCell>
-                      <TableCell className="text">{od.status.admin || 'Pending'}</TableCell>
                       <TableCell className="text">{od.status.ceo || 'Pending'}</TableCell>
+                      <TableCell className="text">{od.status.admin || 'Pending'}</TableCell>
                       {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                         <TableCell>
                           {user.loginType === 'HOD' && od.status.hod === 'Pending' && (
@@ -307,31 +311,7 @@ function ODList() {
                               </Button>
                             </div>
                           )}
-                          {user.loginType === 'Admin' && od.status.hod === 'Approved' && od.status.admin === 'Pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(od._id, 'Approved', 'admin')}
-                                disabled={loading || od.status.admin !== 'Pending'}
-                                aria-label={`Approve OD for ${od.name}`}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(od._id, 'Rejected', 'admin')}
-                                disabled={loading || od.status.admin !== 'Pending'}
-                                aria-label={`Reject OD for ${od.name}`}
-                              >
-                                Reject
-                              </Button>
-                            </div>
-                          )}
-                          {user.loginType === 'CEO' && od.status.admin === 'Approved' && od.status.ceo === 'Pending' && (
+                          {user.loginType === 'CEO' && od.status.hod === 'Approved' && od.status.ceo === 'Pending' && (
                             <div className="flex gap-2">
                               <Button
                                 variant="default"
@@ -349,6 +329,30 @@ function ODList() {
                                 className="bg-red-600 hover:bg-red-700 text-white"
                                 onClick={() => handleApproval(od._id, 'Rejected', 'ceo')}
                                 disabled={loading || od.status.ceo !== 'Pending'}
+                                aria-label={`Reject OD for ${od.name}`}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                          {user.loginType === 'Admin' && od.status.ceo === 'Approved' && od.status.admin === 'Pending' && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => handleApproval(od._id, 'Approved', 'admin')}
+                                disabled={loading || od.status.admin !== 'Pending'}
+                                aria-label={`Approve OD for ${od.name}`}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                onClick={() => handleApproval(od._id, 'Rejected', 'admin')}
+                                disabled={loading || od.status.admin !== 'Pending'}
                                 aria-label={`Reject OD for ${od.name}`}
                               >
                                 Reject

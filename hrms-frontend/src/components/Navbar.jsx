@@ -237,7 +237,7 @@ function Navbar() {
                     {({ active }) => (
                       <div
                         className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
-                          active ? 'bg-primary text-primary-foreground' : ''
+                          active ? 'bg-gray-200' : ''
                         }`}
                         onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}
                       >
@@ -249,7 +249,7 @@ function Navbar() {
                     {({ active }) => (
                       <div
                         className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
-                          active ? 'bg-destructive text-destructive-foreground' : ''
+                          active ? 'bg-gray-200' : ''
                         }`}
                         onClick={handleLogout}
                       >
