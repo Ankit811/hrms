@@ -6,7 +6,7 @@ import Notification from './Notification';
 import { AuthContext } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 import io from 'socket.io-client';
-import { Menu as MenuIcon } from 'lucide-react';
+import { Menu as MenuIcon, ChevronDown } from 'lucide-react';
 
 function Navbar() {
   const { user, logout, loading } = useContext(AuthContext);
@@ -14,7 +14,7 @@ function Navbar() {
   const location = useLocation();
   const socketRef = useRef(null);
 
-  // Define menu items with OD links added
+  // Define menu items with categorized Apply and Approve dropdowns for Admin and HOD
   const menuItems = {
     Admin: [
       { text: 'Dashboard', path: '/admin/dashboard' },
@@ -22,17 +22,27 @@ function Navbar() {
       { text: 'Employees', path: '/admin/employees' },
       { text: 'Add Employee', path: '/admin/add-employee' },
       { text: 'Attendance', path: '/admin/attendance' },
-      { text: 'Apply Leave', path: '/admin/leave' },
-      { text: 'Approve Leave', path: '/admin/approve-leave' },
-      { text: 'Apply OD', path: '/admin/od' }, // Added OD Form
-      { text: 'Approve OD', path: '/admin/approve-od' }, // Added OD List
-      { text: 'Approve OT', path: '/admin/approve-ot' },
+      {
+        text: 'Apply',
+        subItems: [
+          { text: 'Apply Leave', path: '/admin/leave' },
+          { text: 'Apply OD', path: '/admin/od' },
+        ],
+      },
+      {
+        text: 'Approve',
+        subItems: [
+          { text: 'Approve Leave', path: '/admin/approve-leave' },
+          { text: 'Approve OD', path: '/admin/approve-od' },
+          { text: 'Approve OT', path: '/admin/approve-ot' },
+        ],
+      },
     ],
     CEO: [
       { text: 'Dashboard', path: '/ceo/dashboard' },
       { text: 'Employees', path: '/ceo/employees' },
       { text: 'Approve Leaves', path: '/ceo/approve-leaves' },
-      { text: 'Approve OD', path: '/ceo/approve-od' }, // Added OD List
+      { text: 'Approve OD', path: '/ceo/approve-od' },
       { text: 'Approve OT', path: '/ceo/approve-ot' },
     ],
     HOD: [
@@ -40,19 +50,29 @@ function Navbar() {
       { text: 'My Dashboard', path: '/hod/employee-dashboard' },
       { text: 'Employees', path: '/hod/employees' },
       { text: 'Attendance', path: '/hod/attendance' },
-      { text: 'Apply Leave', path: '/hod/leave' },
-      { text: 'Approve Leave', path: '/hod/approve-leave' },
-      { text: 'Apply OD', path: '/hod/od' }, // Added OD Form
-      { text: 'Approve OD', path: '/hod/approve-od' }, // Added OD List
-      ...(user?.department?.name && ['Production', 'Testing', 'AMETL', 'Admin'].includes(user.department.name)
-        ? [{ text: 'Approve OT', path: '/hod/approve-ot' }]
-        : []),
+      {
+        text: 'Apply',
+        subItems: [
+          { text: 'Apply Leave', path: '/hod/leave' },
+          { text: 'Apply OD', path: '/hod/od' },
+        ],
+      },
+      {
+        text: 'Approve',
+        subItems: [
+          { text: 'Approve Leave', path: '/hod/approve-leave' },
+          { text: 'Approve OD', path: '/hod/approve-od' },
+          ...(user?.department?.name && ['Production', 'Testing', 'AMETL', 'Admin'].includes(user.department.name)
+            ? [{ text: 'Approve OT', path: '/hod/approve-ot' }]
+            : []),
+        ],
+      },
     ],
     Employee: [
       { text: 'My Dashboard', path: '/employee/employee-dashboard' },
       { text: 'Apply Leave', path: '/employee/leave' },
-      { text: 'Apply OD', path: '/employee/od' }, // Added OD Form
-      { text: 'OD List', path: '/employee/od-list' }, // Added OD List
+      { text: 'Apply OD', path: '/employee/od' },
+      { text: 'OD List', path: '/employee/od-list' },
     ],
   };
 
@@ -67,9 +87,10 @@ function Navbar() {
     navigate(defaultPaths[user?.loginType] || '/');
   };
 
-  const handleNavigation = (item) => {
-    if (item.path) {
-      navigate(item.path);
+  const handleNavigation = (item, subItem = null) => {
+    const path = subItem ? subItem.path : item.path;
+    if (path) {
+      navigate(path);
     }
   };
 
@@ -145,19 +166,71 @@ function Navbar() {
           {user && (
             <nav className="hidden md:flex items-center space-x-2">
               {menuItems[user.loginType]?.map((item, index) => (
-                <motion.div
-                  key={index}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 ${
-                    location.pathname === item.path
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                  onClick={() => handleNavigation(item)}
-                >
-                  {item.text}
-                </motion.div>
+                <div key={index} className="relative">
+                  {item.subItems ? (
+                    <Menu as="div" className="relative inline-block text-left">
+                      <Menu.Button
+                        as={motion.div}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 flex items-center space-x-1 ${
+                          item.subItems.some((subItem) => location.pathname === subItem.path)
+                            ? 'bg-muted text-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        }`}
+                        aria-label={`Open ${item.text} dropdown`}
+                      >
+                        <span>{item.text}</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Menu.Button>
+                      <Transition
+                        as={React.Fragment}
+                        enter="transition ease-out duration-100"
+                        enterFrom="transform opacity-0 scale-95"
+                        enterTo="transform opacity-100 scale-100"
+                        leave="transition ease-in duration-75"
+                        leaveFrom="transform opacity-100 scale-100"
+                        leaveTo="transform opacity-0 scale-95"
+                      >
+                        <Menu.Items className="absolute left-0 mt-2 w-56 origin-top-left bg-popover rounded-lg shadow-xl p-2 z-50 border">
+                          {item.subItems.map((subItem, subIndex) => (
+                            <Menu.Item key={subIndex}>
+                              {({ active }) => (
+                                <div
+                                  className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
+                                    location.pathname === subItem.path
+                                      ? 'bg-muted font-semibold text-foreground'
+                                      : active
+                                      ? 'bg-muted text-foreground'
+                                      : 'text-foreground'
+                                  }`}
+                                  onClick={() => handleNavigation(item, subItem)}
+                                  aria-label={subItem.text}
+                                >
+                                  {subItem.text}
+                                </div>
+                              )}
+                            </Menu.Item>
+                          ))}
+                        </Menu.Items>
+                      </Transition>
+                    </Menu>
+                  ) : (
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 ${
+                        location.pathname === item.path
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                      onClick={() => handleNavigation(item)}
+                      aria-label={item.text}
+                    >
+                      {item.text}
+                    </motion.div>
+                  )}
+                </div>
               ))}
             </nav>
           )}
@@ -169,6 +242,7 @@ function Navbar() {
                   as={motion.div}
                   whileHover={{ scale: 1.1 }}
                   className="text-muted-foreground hover:text-foreground cursor-pointer"
+                  aria-label="Open mobile menu"
                 >
                   <MenuIcon className="h-6 w-6" />
                 </Menu.Button>
@@ -183,22 +257,52 @@ function Navbar() {
                 >
                   <Menu.Items className="absolute left-0 mt-2 w-56 origin-top-left bg-popover rounded-lg shadow-xl p-2 z-50">
                     {menuItems[user.loginType]?.map((item, index) => (
-                      <Menu.Item key={index}>
-                        {({ active }) => (
-                          <div
-                            className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
-                              location.pathname === item.path
-                                ? 'bg-muted font-semibold text-foreground'
-                                : active
-                                ? 'bg-muted text-foreground'
-                                : 'text-foreground'
-                            }`}
-                            onClick={() => handleNavigation(item)}
-                          >
-                            {item.text}
+                      <div key={index}>
+                        {item.subItems ? (
+                          <div className="py-1">
+                            <div className="px-4 py-2 text-sm font-semibold text-foreground">
+                              {item.text}
+                            </div>
+                            {item.subItems.map((subItem, subIndex) => (
+                              <Menu.Item key={subIndex}>
+                                {({ active }) => (
+                                  <div
+                                    className={`pl-6 py-2 text-sm cursor-pointer transition-colors duration-200 ${
+                                      location.pathname === subItem.path
+                                        ? 'bg-muted font-semibold text-foreground'
+                                        : active
+                                        ? 'bg-muted text-foreground'
+                                        : 'text-foreground'
+                                    }`}
+                                    onClick={() => handleNavigation(item, subItem)}
+                                    aria-label={subItem.text}
+                                  >
+                                    {subItem.text}
+                                  </div>
+                                )}
+                              </Menu.Item>
+                            ))}
                           </div>
+                        ) : (
+                          <Menu.Item>
+                            {({ active }) => (
+                              <div
+                                className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
+                                  location.pathname === item.path
+                                    ? 'bg-muted font-semibold text-foreground'
+                                    : active
+                                    ? 'bg-muted text-foreground'
+                                    : 'text-foreground'
+                                }`}
+                                onClick={() => handleNavigation(item)}
+                                aria-label={item.text}
+                              >
+                                {item.text}
+                              </div>
+                            )}
+                          </Menu.Item>
                         )}
-                      </Menu.Item>
+                      </div>
                     ))}
                   </Menu.Items>
                 </Transition>
@@ -216,6 +320,7 @@ function Navbar() {
                 as={motion.div}
                 whileHover={{ scale: 1.1 }}
                 className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg cursor-pointer shadow-md"
+                aria-label="Open user menu"
               >
                 {userInitial}
               </Menu.Button>
@@ -240,6 +345,7 @@ function Navbar() {
                           active ? 'bg-gray-200' : ''
                         }`}
                         onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}
+                        aria-label="View profile"
                       >
                         Profile
                       </div>
@@ -252,6 +358,7 @@ function Navbar() {
                           active ? 'bg-gray-200' : ''
                         }`}
                         onClick={handleLogout}
+                        aria-label="Logout"
                       >
                         Logout
                       </div>
@@ -270,3 +377,4 @@ function Navbar() {
 }
 
 export default Navbar;
+
