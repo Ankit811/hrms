@@ -267,24 +267,27 @@ function EmployeeDashboard() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow className="border-b">
+                      <TableHead className="font-semibold">L.A Date</TableHead>
                       <TableHead className="font-semibold">Type</TableHead>
                       <TableHead className="font-semibold">From</TableHead>
                       <TableHead className="font-semibold">To</TableHead>
                       <TableHead className="font-semibold">Status (HOD)</TableHead>
                       <TableHead className="font-semibold">Status (CEO)</TableHead>
                       <TableHead className="font-semibold">Status (Admin)</TableHead>
+                      <TableHead className="font-semibold">Remarks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.leaveRecords.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4">
+                        <TableCell colSpan={8} className="text-center py-4">
                           No leave records found.
                         </TableCell>
                       </TableRow>
                     ) : (
                       data.leaveRecords.map((leave) => (
                         <TableRow key={leave._id} className="hover:bg-gray-50">
+                          <TableCell>{new Date(leave.createdAt).toLocaleDateString()}</TableCell>
                           <TableCell>{leave.leaveType}</TableCell>
                           <TableCell>
                             {(leave.fullDay?.from || leave.halfDay?.date)
@@ -298,7 +301,8 @@ function EmployeeDashboard() {
                           </TableCell>
                           <TableCell>{leave.status.hod || 'Pending'}</TableCell>
                           <TableCell>{leave.status.ceo || 'Pending'}</TableCell>
-                          <TableCell>{leave.status.admin || 'Pending'}</TableCell>                        
+                          <TableCell>{leave.status.admin || 'Pending'}</TableCell>
+                          <TableCell>{leave.remarks || 'N/A'}</TableCell>
                         </TableRow>
                       ))
                     )}
@@ -321,7 +325,7 @@ function EmployeeDashboard() {
                       <TableHead className="font-semibold">Purpose</TableHead>
                       <TableHead className="font-semibold">Place/Unit</TableHead>
                       <TableHead className="font-semibold">Status (HOD)</TableHead>
-                       <TableHead className="font-semibold">Status (CEO)</TableHead>
+                      <TableHead className="font-semibold">Status (CEO)</TableHead>
                       <TableHead className="font-semibold">Status (Admin)</TableHead>
                     </TableRow>
                   </TableHeader>

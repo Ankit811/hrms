@@ -97,14 +97,6 @@ function OTApproval() {
       const updatedClaims = claims.map(claim => {
         if (claim._id === id) {
           const newStatus = { ...claim.status, [currentStage]: status };
-          // Update the next stage based on the current stage and status
-          if (status === 'Approved') {
-            if (currentStage === 'hod') {
-              newStatus.ceo = 'Pending';
-            } else if (currentStage === 'ceo') {
-              newStatus.admin = 'Pending';
-            }
-          }
           return { ...claim, status: newStatus };
         }
         return claim;
@@ -163,6 +155,7 @@ function OTApproval() {
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="Approved">Approved</SelectItem>
                   <SelectItem value="Rejected">Rejected</SelectItem>
+                  <SelectItem value="Acknowledged">Acknowledged</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -246,7 +239,7 @@ function OTApproval() {
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                                 onClick={() => handleApproval(claim._id, 'Approved', 'hod')}
-                                disabled={loading || claim.status.hod !== 'Pending'}
+                                disabled={loading}
                                 aria-label={`Approve OT claim for ${claim.name}`}
                               >
                                 Approve
@@ -255,7 +248,7 @@ function OTApproval() {
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
                                 onClick={() => handleApproval(claim._id, 'Rejected', 'hod')}
-                                disabled={loading || claim.status.hod !== 'Pending'}
+                                disabled={loading}
                                 aria-label={`Reject OT claim for ${claim.name}`}
                               >
                                 Reject
@@ -268,7 +261,7 @@ function OTApproval() {
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                                 onClick={() => handleApproval(claim._id, 'Approved', 'ceo')}
-                                disabled={loading || claim.status.ceo !== 'Pending'}
+                                disabled={loading}
                                 aria-label={`Approve OT claim for ${claim.name}`}
                               >
                                 Approve
@@ -277,7 +270,7 @@ function OTApproval() {
                                 size="sm"
                                 className="bg-red-600 hover:bg-red-700 text-white"
                                 onClick={() => handleApproval(claim._id, 'Rejected', 'ceo')}
-                                disabled={loading || claim.status.ceo !== 'Pending'}
+                                disabled={loading}
                                 aria-label={`Reject OT claim for ${claim.name}`}
                               >
                                 Reject
@@ -289,20 +282,11 @@ function OTApproval() {
                               <Button
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Approved', 'admin')}
-                                disabled={loading || claim.status.admin !== 'Pending'}
-                                aria-label={`Approve OT claim for ${claim.name}`}
+                                onClick={() => handleApproval(claim._id, 'Acknowledged', 'admin')}
+                                disabled={loading}
+                                aria-label={`Acknowledge OT claim for ${claim.name}`}
                               >
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(claim._id, 'Rejected', 'admin')}
-                                disabled={loading || claim.status.admin !== 'Pending'}
-                                aria-label={`Reject OT claim for ${claim.name}`}
-                              >
-                                Reject
+                                Acknowledged
                               </Button>
                             </div>
                           )}

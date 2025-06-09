@@ -125,7 +125,7 @@ function ODList() {
         if (od._id === id) {
           const newStatus = { ...od.status, [currentStage]: status };
           // Update the next stage based on the current stage and status
-          if (status === 'Approved') {
+          if (status === 'Approved' || status === 'Acknowledged') {
             if (currentStage === 'hod') {
               newStatus.ceo = 'Pending';
             } else if (currentStage === 'ceo') {
@@ -194,6 +194,7 @@ function ODList() {
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="Approved">Approved</SelectItem>
                   <SelectItem value="Rejected">Rejected</SelectItem>
+                  <SelectItem value="Acknowledged">Acknowledged</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -341,21 +342,11 @@ function ODList() {
                                 variant="default"
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                                onClick={() => handleApproval(od._id, 'Approved', 'admin')}
+                                onClick={() => handleApproval(od._id, 'Acknowledged', 'admin')}
                                 disabled={loading || od.status.admin !== 'Pending'}
-                                aria-label={`Approve OD for ${od.name}`}
+                                aria-label={`Acknowledge OD for ${od.name}`}
                               >
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleApproval(od._id, 'Rejected', 'admin')}
-                                disabled={loading || od.status.admin !== 'Pending'}
-                                aria-label={`Reject OD for ${od.name}`}
-                              >
-                                Reject
+                                Acknowledged
                               </Button>
                             </div>
                           )}

@@ -50,6 +50,9 @@ function LeaveList() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [rejectionRemarks, setRejectionRemarks] = useState('');
+  const [showRejectionDialog, setShowRejectionDialog] = useState(false);
+  const [pendingRejection, setPendingRejection] = useState(null);
 
   const fetchLeaves = useCallback(async (currentPage = page, currentLimit = limit) => {
     try {
@@ -120,14 +123,20 @@ function LeaveList() {
       });
   };
 
-  const handleApproval = async (id, status, currentStage) => {
+  const handleApproval = async (id, status, currentStage, remarks = '') => {
     try {
       const leaveData = { status };
+      if (status === 'Rejected' && ['hod', 'ceo'].includes(currentStage)) {
+        if (!remarks.trim()) {
+          alert('Remarks are required for rejection.');
+          return;
+        }
+        leaveData.remarks = remarks;
+      }
       await api.put(`/leaves/${id}/approve`, leaveData);
       const updatedLeaves = leaves.map(l => {
         if (l._id === id) {
           const newStatus = { ...l.status, [currentStage]: status };
-          // Update the next stage based on the current stage and status
           if (status === 'Approved') {
             if (currentStage === 'hod') {
               newStatus.ceo = 'Pending';
@@ -135,7 +144,7 @@ function LeaveList() {
               newStatus.admin = 'Pending';
             }
           }
-          return { ...l, status: newStatus };
+          return { ...l, status: newStatus, remarks: status === 'Rejected' ? remarks : l.remarks };
         }
         return l;
       });
@@ -146,6 +155,22 @@ function LeaveList() {
       console.error('Approval error:', err);
       alert(`Error processing leave approval: ${err.response?.data?.message || err.message}`);
     }
+  };
+
+  const handleRejection = (id, stage) => {
+    setPendingRejection({ id, stage });
+    setRejectionRemarks('');
+    setShowRejectionDialog(true);
+  };
+
+  const confirmRejection = () => {
+    if (!rejectionRemarks.trim()) {
+      alert('Please enter remarks for rejection.');
+      return;
+    }
+    handleApproval(pendingRejection.id, 'Rejected', pendingRejection.stage, rejectionRemarks);
+    setShowRejectionDialog(false);
+    setPendingRejection(null);
   };
 
   const handlePageChange = (newPage) => {
@@ -159,7 +184,6 @@ function LeaveList() {
     fetchLeaves(1, newSize);
   };
 
-  // Debug user loginType and leave status
   console.log('User loginType:', user?.loginType);
   console.log('Leaves:', leaves);
 
@@ -226,6 +250,7 @@ function LeaveList() {
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="Approved">Approved</SelectItem>
                   <SelectItem value="Rejected">Rejected</SelectItem>
+                  <SelectItem value="Acknowledged">Acknowledged</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -265,6 +290,7 @@ function LeaveList() {
               <TableHeader>
                 <TableRow className="border-b">
                   <TableHead className="font-semibold text">Employee</TableHead>
+                  <TableHead className="font-semibold text">L.A Date</TableHead>
                   <TableHead className="font-semibold text">Type</TableHead>
                   <TableHead className="font-semibold text">From</TableHead>
                   <TableHead className="font-semibold text">To</TableHead>
@@ -275,13 +301,14 @@ function LeaveList() {
                   {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
                     <TableHead className="font-semibold text">Action</TableHead>
                   )}
+                  <TableHead className="font-semibold text">Remarks</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8}
+                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 11 : 10}
                       className="text-center text py-4"
                     >
                       Loading...
@@ -290,7 +317,7 @@ function LeaveList() {
                 ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 9 : 8}
+                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 11 : 10}
                       className="text-center text py-4"
                     >
                       No leave records found.
@@ -302,6 +329,7 @@ function LeaveList() {
                     return (
                       <TableRow key={leave._id} className="hover:bg-gray-50">
                         <TableCell className="text">{leave.name}</TableCell>
+                        <TableCell className="text">{new Date(leave.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell className="text">{leave.leaveType}</TableCell>
                         <TableCell className="text">
                           {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
@@ -339,7 +367,7 @@ function LeaveList() {
                                   variant="destructive"
                                   size="sm"
                                   className="bg-red-600 hover:bg-red-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Rejected', 'hod')}
+                                  onClick={() => handleRejection(leave._id, 'hod')}
                                   disabled={loading || leave.status.hod !== 'Pending'}
                                   aria-label={`Reject leave for ${leave.name}`}
                                 >
@@ -363,7 +391,7 @@ function LeaveList() {
                                   variant="destructive"
                                   size="sm"
                                   className="bg-red-600 hover:bg-red-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Rejected', 'ceo')}
+                                  onClick={() => handleRejection(leave._id, 'ceo')}
                                   disabled={loading || leave.status.ceo !== 'Pending'}
                                   aria-label={`Reject leave for ${leave.name}`}
                                 >
@@ -377,26 +405,17 @@ function LeaveList() {
                                   variant="default"
                                   size="sm"
                                   className="bg-blue-600 hover:bg-blue-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Approved', 'admin')}
+                                  onClick={() => handleApproval(leave._id, 'Acknowledged', 'admin')}
                                   disabled={loading || leave.status.admin !== 'Pending'}
-                                  aria-label={`Approve leave for ${leave.name}`}
+                                  aria-label={`Acknowledge leave for ${leave.name}`}
                                 >
-                                  Approve
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="bg-red-600 hover:bg-red-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Rejected', 'admin')}
-                                  disabled={loading || leave.status.admin !== 'Pending'}
-                                  aria-label={`Reject leave for ${leave.name}`}
-                                >
-                                  Reject
+                                  Acknowledged
                                 </Button>
                               </div>
                             )}
                           </TableCell>
                         )}
+                        <TableCell className="text">{leave.remarks || 'N/A'}</TableCell>
                       </TableRow>
                     );
                   })
@@ -422,6 +441,7 @@ function LeaveList() {
                 </DialogHeader>
                 {selectedLeave && (
                   <div className="space-y-3">
+                    <p><strong>L.A Date:</strong> {new Date(selectedLeave.createdAt).toLocaleDateString()}</p>
                     <p><strong>Leave Type:</strong> {selectedLeave.leaveType}</p>
                     <p><strong>Reason:</strong> {selectedLeave.reason}</p>
                     <p><strong>Charge Given To:</strong> {selectedLeave.chargeGivenTo}</p>
@@ -429,10 +449,40 @@ function LeaveList() {
                     {selectedLeave.compensatoryDate && <p><strong>Compensatory Date:</strong> {new Date(selectedLeave.compensatoryDate).toLocaleDateString()}</p>}
                     {selectedLeave.projectDetails && <p><strong>Project Details:</strong> {selectedLeave.projectDetails}</p>}
                     {selectedLeave.restrictedHoliday && <p><strong>Restricted Holiday:</strong> {selectedLeave.restrictedHoliday}</p>}
+                    <p><strong>Remarks:</strong> {selectedLeave.remarks || 'N/A'}</p>
                   </div>
                 )}
                 <DialogFooter className="mt-4">
                   <Button onClick={() => setSelectedLeave(null)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showRejectionDialog} onOpenChange={() => setShowRejectionDialog(false)}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Reject Leave</DialogTitle>
+                  <DialogDescription>
+                    Please provide a reason for rejecting this leave application.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <Label htmlFor="rejectionRemarks">Rejection Remarks</Label>
+                  <Input
+                    id="rejectionRemarks"
+                    value={rejectionRemarks}
+                    onChange={(e) => setRejectionRemarks(e.target.value)}
+                    placeholder="Enter reason for rejection"
+                  />
+                </div>
+                <DialogFooter className="mt-4">
+                  <Button onClick={() => setShowRejectionDialog(false)}>Cancel</Button>
+                  <Button
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={confirmRejection}
+                  >
+                    Confirm Rejection
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

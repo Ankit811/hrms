@@ -22,6 +22,8 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     }
 
     const currentYear = new Date().getFullYear();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
 
     const leaveDays = req.body.halfDay ? 0.5 :
       (req.body.fullDay?.from && req.body.fullDay?.to
@@ -31,14 +33,19 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       return res.status(400).json({ message: 'Invalid leave dates provided' });
     }
 
-    // Validate leave dates
     let leaveStart, leaveEnd;
     if (req.body.halfDay?.date) {
       leaveStart = new Date(req.body.halfDay.date);
       leaveEnd = new Date(req.body.halfDay.date);
+      if (leaveStart < today) {
+        return res.status(400).json({ message: 'Half day date cannot be in the past' });
+      }
     } else if (req.body.fullDay?.from && req.body.fullDay?.to) {
       leaveStart = new Date(req.body.fullDay.from);
       leaveEnd = new Date(req.body.fullDay.to);
+      if (leaveStart < today) {
+        return res.status(400).json({ message: 'Full day from date cannot be in the past' });
+      }
       if (leaveStart > leaveEnd) {
         return res.status(400).json({ message: 'Leave start date cannot be after end date' });
       }
@@ -46,7 +53,6 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       return res.status(400).json({ message: 'Either halfDay or fullDay dates are required' });
     }
 
-    // Custom Leave Type Validations
     const leaveType = req.body.leaveType;
     const isConfirmed = user.employeeType === 'Confirmed';
     const joinDate = new Date(user.dateOfJoining);
@@ -70,7 +76,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
         const medicalLeavesThisYear = await Leave.find({
           employeeId: user.employeeId,
           leaveType: 'Medical',
-          'status.admin': 'Approved', // Updated to check final approval
+          'status.admin': 'Acknowledged',
           $or: [
             { 'fullDay.from': { $gte: new Date(currentYear, 0, 1) } },
             { 'halfDay.date': { $gte: new Date(currentYear, 0, 1) } },
@@ -116,7 +122,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
           $or: [
             { 'status.hod': { $in: ['Pending', 'Approved'] } },
             { 'status.ceo': { $in: ['Pending', 'Approved'] } },
-            { 'status.admin': { $in: ['Pending', 'Approved'] } },
+            { 'status.admin': { $in: ['Pending', 'Acknowledged'] } },
           ],
         });
         if (existingRestrictedLeave) {
@@ -142,7 +148,6 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
         return res.status(400).json({ message: 'Invalid leave type.' });
     }
 
-    // Set status based on user role
     const status = {
       hod: req.user.role === 'Employee' ? 'Pending' : 'Approved',
       ceo: 'Pending',
@@ -172,7 +177,6 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
     await leave.save();
 
-    // Notify based on user role
     if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       const ceo = await Employee.findOne({ loginType: 'CEO' });
       if (ceo) {
@@ -197,219 +201,200 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 });
 
 // Approve Leave
-router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res) => {
+router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res) => {
   try {
-    const leave = await Leave.findById(req.params.id);
-    if (!leave) return res.status(404).json({ message: 'Leave not found' });
+    const leave = await Leave.findById(req.params.id).populate('employee');
+    if (!leave) {
+      return res.status(404).json({ message: 'Leave request not found' });
+    }
 
-    const user = await Employee.findOne({ employeeId: leave.employeeId });
-    if (!user) return res.status(404).json({ message: 'Employee not found' });
+    const user = await Employee.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    let nextStage = '';
-    let approverMessage = '';
+    const { status, remarks } = req.body;
+    const currentStage = req.user.role.toLowerCase();
+    const validStatuses = req.user.role === 'Admin' ? ['Acknowledged'] : ['Approved', 'Rejected'];
 
-    if (req.user.role === 'HOD' && leave.status.hod === 'Pending') {
-      leave.status.hod = req.body.status;
-      if (req.body.status === 'Approved') {
-        nextStage = 'ceo';
-        approverMessage = `Leave request from ${leave.name} approved by HOD`;
-      } else {
-        approverMessage = `Your leave request was rejected by HOD`;
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: `Invalid status. Must be one of ${validStatuses.join(', ')}` });
+    }
+
+    if (leave.status[currentStage] !== 'Pending') {
+      return res.status(400).json({ message: `Leave is not pending ${currentStage.toUpperCase()} approval` });
+    }
+
+    if (status === 'Rejected' && ['hod', 'ceo'].includes(currentStage) && (!remarks || remarks.trim() === '')) {
+      return res.status(400).json({ message: 'Remarks are required for rejection' });
+    }
+
+    if (req.user.role === 'HOD' && user.department.toString() !== leave.department.toString()) {
+      return res.status(403).json({ message: 'Not authorized to approve leaves for this department' });
+    }
+
+    if (req.user.role === 'CEO' && leave.status.hod !== 'Approved') {
+      return res.status(400).json({ message: 'Leave must be approved by HOD first' });
+    }
+
+    if (req.user.role === 'Admin' && leave.status.ceo !== 'Approved') {
+      return res.status(400).json({ message: 'Leave must be approved by CEO first' });
+    }
+
+    leave.status[currentStage] = status;
+    if (status === 'Rejected' && ['hod', 'ceo'].includes(currentStage)) {
+      leave.remarks = remarks;
+    }
+
+    if (status === 'Approved' && currentStage === 'hod') {
+      leave.status.ceo = 'Pending';
+      const ceo = await Employee.findOne({ loginType: 'CEO' });
+      if (ceo) {
+        await Notification.create({
+          userId: ceo.employeeId,
+          message: `Leave request from ${leave.name} awaiting your approval`,
+        });
+        if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `Leave request from ${leave.name} awaiting your approval` });
       }
-    } else if (req.user.role === 'CEO' && leave.status.hod === 'Approved' && leave.status.ceo === 'Pending') {
-      leave.status.ceo = req.body.status;
-      if (req.body.status === 'Approved') {
-        nextStage = user.loginType === 'Admin' ? '' : 'admin';
-        approverMessage = `Leave request from ${leave.name} approved by CEO`;
-      } else {
-        approverMessage = `Your leave request was rejected by CEO`;
+    }
+
+    if (status === 'Approved' && currentStage === 'ceo') {
+      leave.status.admin = 'Pending';
+      const admin = await Employee.findOne({ loginType: 'Admin' });
+      if (admin) {
+        await Notification.create({
+          userId: admin.employeeId,
+          message: `Leave request from ${leave.name} awaiting your acknowledgment`,
+        });
+        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `Leave request from ${leave.name} awaiting your acknowledgment` });
       }
-    } else if (req.user.role === 'Admin' && leave.status.ceo === 'Approved' && leave.status.admin === 'Pending') {
-      leave.status.admin = req.body.status;
-      approverMessage = `Your leave request was ${req.body.status.toLowerCase()} by Admin`;
-      if (req.body.status === 'Approved') {
-        let leaveStart, leaveEnd;
-        if (leave.halfDay?.date) {
-          leaveStart = new Date(leave.halfDay.date);
-          leaveEnd = new Date(leave.halfDay.date);
-        } else if (leave.fullDay?.from && leave.fullDay?.to) {
-          leaveStart = new Date(leave.fullDay.from);
-          leaveEnd = new Date(leave.fullDay.to);
-        }
-        if (leaveStart && leaveEnd) {
-          const leaveDays = leaveStart.getTime() === leaveEnd.getTime() ? 0.5 : ((leaveEnd - leaveStart) / (1000 * 60 * 60 * 24)) + 1;
-          switch (leave.leaveType) {
-            case 'Casual':
-              if (user.paidLeaves >= leaveDays) {
-                await user.deductPaidLeaves(leaveStart, leaveEnd);
-              } else {
-                return res.status(400).json({ message: 'Insufficient Casual leave balance.' });
-              }
-              break;
-            case 'Medical':
-              if (user.medicalLeaves >= leaveDays) {
-                await user.deductMedicalLeaves(leaveDays);
-              } else {
-                return res.status(400).json({ message: 'Insufficient Medical leave balance.' });
-              }
-              break;
-            case 'Maternity':
-              if (user.maternityClaims < 2) {
-                await user.recordMaternityClaim();
-              } else {
-                return res.status(400).json({ message: 'Maternity leave limit reached.' });
-              }
-              break;
-            case 'Paternity':
-              if (user.paternityClaims < 2) {
-                await user.recordPaternityClaim();
-              } else {
-                return res.status(400).json({ message: 'Paternity leave limit reached.' });
-              }
-              break;
-            case 'Compensatory':
-              if (!leave.compensatoryEntryId) {
-                return res.status(400).json({ message: 'Compensatory entry ID is required' });
-              }
-              await user.deductCompensatoryLeaves(leave.compensatoryEntryId);
-              break;
-            case 'Restricted Holidays':
-              if (user.restrictedHolidays >= 1) {
-                await user.deductRestrictedHolidays();
-              } else {
-                return res.status(400).json({ message: 'Restricted Holiday already used.' });
-              }
-              break;
-            case 'Leave Without Pay(LWP)':
-              await user.incrementUnpaidLeaves(leaveStart, leaveEnd);
-              break;
+    }
+
+    if (status === 'Acknowledged' && currentStage === 'admin') {
+      const employee = leave.employee;
+      switch (leave.leaveType) {
+        case 'Casual':
+          await employee.deductPaidLeaves(
+            leave.fullDay?.from || leave.halfDay?.date,
+            leave.fullDay?.to || leave.halfDay?.date
+          );
+          break;
+        case 'Medical':
+          employee.medicalLeaves -= leave.halfDay ? 0.5 :
+            (leave.fullDay?.from && leave.fullDay?.to
+              ? ((new Date(leave.fullDay.to) - new Date(leave.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
+              : 0);
+          break;
+        case 'Maternity':
+          employee.maternityClaims += 1;
+          break;
+        case 'Paternity':
+          employee.paternityClaims += 1;
+          break;
+        case 'Restricted Holidays':
+          employee.restrictedHolidays -= 1;
+          break;
+        case 'Compensatory':
+          const entry = employee.compensatoryAvailable.find(e => e._id.toString() === leave.compensatoryEntryId.toString());
+          if (entry) {
+            entry.status = 'Used';
           }
-        }
+          break;
+        case 'Leave Without Pay(LWP)':
+          break;
+        default:
+          return res.status(400).json({ message: 'Invalid leave type for balance update' });
       }
-    } else {
-      return res.status(403).json({ message: 'Not authorized to approve this leave' });
+
+      await employee.save();
+
+      await Notification.create({
+        userId: employee.employeeId,
+        message: `Your ${leave.leaveType} leave request has been acknowledged by Admin`,
+      });
+      if (global._io) global._io.to(employee.employeeId).emit('notification', { message: `Your ${leave.leaveType} leave request has been acknowledged by Admin` });
+    }
+
+    if (status === 'Rejected') {
+      await Notification.create({
+        userId: leave.employee.employeeId,
+        message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}`,
+      });
+      if (global._io) global._io.to(leave.employee.employeeId).emit('notification', { message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}` });
     }
 
     await leave.save();
 
-    await Notification.create({ userId: user.employeeId, message: approverMessage });
-    if (global._io) global._io.to(user.employeeId).emit('notification', { message: approverMessage });
+    await Audit.create({
+      user: user.employeeId,
+      action: `${status} Leave`,
+      details: `${status} leave request for ${leave.name} by ${currentStage.toUpperCase()}`,
+    });
 
-    if (nextStage) {
-      let nextApprover = null;
-      if (nextStage === 'ceo') {
-        nextApprover = await Employee.findOne({ loginType: 'CEO' });
-      } else if (nextStage === 'admin') {
-        nextApprover = await Employee.findOne({ loginType: 'Admin' });
-      }
-      if (nextApprover) {
-        await Notification.create({ userId: nextApprover.employeeId, message: `New leave request from ${leave.name}` });
-        if (global._io) global._io.to(nextApprover.employeeId).emit('notification', { message: `New leave request from ${leave.name}` });
-      }
-    }
-
-    await Audit.create({ user: req.user.employeeId, action: `${req.body.status} Leave`, details: `${req.body.status} leave for ${leave.name}` });
-
-    res.json(leave);
+    res.json({ message: `Leave ${status.toLowerCase()} successfully`, leave });
   } catch (err) {
     console.error('Leave approval error:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// Get Leaves (by role)
+// Get Leaves
 router.get('/', auth, async (req, res) => {
   try {
-    let filter = {};
     const { leaveType, status, fromDate, toDate, page = 1, limit = 10 } = req.query;
+    const user = await Employee.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const query = {};
+    if (leaveType && leaveType !== 'all') query.leaveType = leaveType;
+    if (status && status !== 'all') {
+      query.$or = [
+        { 'status.hod': status },
+        { 'status.ceo': status },
+        { 'status.admin': status },
+      ];
+    }
+    if (fromDate || toDate) {
+      query.$or = [
+        { 'fullDay.from': {} },
+        { 'fullDay.to': {} },
+        { 'halfDay.date': {} },
+      ];
+      if (fromDate) {
+        query.$or[0]['fullDay.from'].$gte = new Date(fromDate);
+        query.$or[2]['halfDay.date'].$gte = new Date(fromDate);
+      }
+      if (toDate) {
+        query.$or[1]['fullDay.to'].$lte = new Date(toDate);
+        query.$or[2]['halfDay.date'].$lte = new Date(toDate);
+      }
+    }
 
     if (req.user.role === 'Employee') {
-      filter = { employeeId: req.user.employeeId };
+      query.employee = req.user.id;
     } else if (req.user.role === 'HOD') {
-      const hod = await Employee.findOne({ employeeId: req.user.employeeId }).populate('department');
-      if (!hod || !hod.department || !hod.department._id) {
-        return res.status(400).json({ message: 'HOD has no valid department assigned' });
-      }
-      filter = { department: hod.department._id };
-      if (status && status !== 'all') {
-        filter.$or = [
-          { 'status.hod': status },
-          { 'status.ceo': status },
-          { 'status.admin': status }
-        ];
-      }
-    } else if (req.user.role === 'Admin') {
-      if (status && status !== 'all') {
-        filter.$or = [
-          { 'status.hod': status },
-          { 'status.ceo': status },
-          { 'status.admin': status }
-        ];
-      } else {
-        filter = {};
-      }
-    } else if (req.user.role === 'CEO') {
-      if (status && status !== 'all') {
-        filter.$or = [
-          { 'status.hod': status },
-          { 'status.ceo': status },
-          { 'status.admin': status }
-        ];
-      } else {
-        filter = {};
-      }
-    } else {
-      return res.status(403).json({ message: 'Unauthorized role' });
+      query.department = user.department;
     }
 
-    if (leaveType && leaveType !== 'all') {
-      filter.leaveType = leaveType;
-    }
+    const leaves = await Leave.find(query)
+      .populate('employee', 'name designation')
+      .populate('department', 'name')
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .sort({ createdAt: -1 });
 
-    if (fromDate || toDate) {
-      const dateConditions = [];
+    const total = await Leave.countDocuments(query);
 
-      if (fromDate) {
-        dateConditions.push({
-          $or: [
-            { 'fullDay.from': { $gte: new Date(fromDate) } },
-            { 'halfDay.date': { $gte: new Date(fromDate) } }
-          ]
-        });
-      }
-
-      if (toDate) {
-        const toDateEnd = new Date(toDate);
-        toDateEnd.setHours(23, 59, 59, 999);
-        dateConditions.push({
-          $or: [
-            { 'fullDay.to': { $lte: toDateEnd } },
-            { 'halfDay.date': { $lte: toDateEnd } }
-          ]
-        });
-      }
-
-      if (dateConditions.length > 0) {
-        filter.$and = dateConditions;
-      }
-    }
-
-    console.log('User role:', req.user.role, 'Employee ID:', req.user.employeeId);
-    console.log('Fetching leaves with filter:', JSON.stringify(filter, null, 2));
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const leaves = await Leave.find(filter)
-      .populate('department employee')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-    const total = await Leave.countDocuments(filter);
-
-    console.log('Leaves found:', leaves.length, 'Total:', total);
-
-    res.json({ leaves, total, page: parseInt(page), limit: parseInt(limit) });
+    res.json({
+      leaves,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
   } catch (err) {
-    console.error('Error fetching leaves:', err.stack);
+    console.error('Fetch leaves error:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

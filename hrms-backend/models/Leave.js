@@ -45,10 +45,11 @@ const leaveSchema = new mongoose.Schema({
 
   status: {
     hod: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-    admin: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    admin: { type: String, enum: ['Pending', 'Acknowledged'], default: 'Pending' },
     ceo: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-  }
+  },
 
+  remarks: { type: String, default: 'N/A' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Leave', leaveSchema);

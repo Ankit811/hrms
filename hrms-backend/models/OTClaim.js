@@ -13,7 +13,7 @@ const otClaimSchema = new mongoose.Schema({
   claimType: { type: String, enum: ['Full', 'Partial'], default: null },
   status: {
     hod: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-    admin: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    admin: { type: String, enum: ['Pending', 'Acknowledged'], default: 'Pending' },
     ceo: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
   },
 }, { timestamps: true });

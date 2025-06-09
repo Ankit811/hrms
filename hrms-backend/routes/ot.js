@@ -9,7 +9,7 @@ const role = require('../middleware/role');
 const Department = require('../models/Department');
 const router = express.Router();
 
-// Submit OT Claim
+// Submit OT Claim (unchanged)
 router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
   try {
     const employee = await Employee.findById(req.user.id).populate('department');
@@ -122,21 +122,8 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 
     await otClaim.save();
 
-    if (req.user.role === 'HOD' || req.user.role === 'Admin') {
-      const ceo = await Employee.findOne({ loginType: 'CEO' });
-      if (ceo) {
-        await Notification.create({
-          userId: ceo.employeeId,
-          message: `New OT claim from ${employee.name}`,
-        });
-        if (global._io)
-          global._io
-            .to(ceo.employeeId)
-            .emit('notification', {
-              message: `New OT claim from ${employee.name}`,
-            });
-      }
-    } else {
+    // Notify the next approver (HOD or CEO) based on the approval hierarchy
+    if (req.user.role === 'Employee') {
       const hod = await Employee.findOne({
         department: employee.department._id,
         loginType: 'HOD',
@@ -144,19 +131,35 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       if (hod) {
         await Notification.create({
           userId: hod.employeeId,
-          message: `New OT claim from ${employee.name}`,
+          message: `New OT claim from ${employee.name} awaits your approval`,
         });
-        if (global._io)
+        if (global._io) {
           global._io
             .to(hod.employeeId)
             .emit('notification', {
-              message: `New OT claim by ${employee.name}`,
+              message: `New OT claim from ${employee.name} awaits your approval`,
             });
         }
       }
+    } else if (req.user.role === 'HOD' || req.user.role === 'Admin') {
+      const ceo = await Employee.findOne({ loginType: 'CEO' });
+      if (ceo) {
+        await Notification.create({
+          userId: ceo.employeeId,
+          message: `New OT claim from ${employee.name} awaits your approval`,
+        });
+        if (global._io) {
+          global._io
+            .to(ceo.employeeId)
+            .emit('notification', {
+              message: `New OT claim from ${employee.name} awaits your approval`,
+            });
+        }
+      }
+    }
 
     await Audit.create({
-      user: { id: employee._id, },
+      user: { id: employee._id },
       action: 'Submit otclaim',
       details: `Submitted OT claim for ${hours} hours on ${otDate.toDateString()}`,
     });
@@ -177,29 +180,44 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
     const employee = await Employee.findById(otClaim.employee._id).populate('department');
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
+    const { status } = req.body;
     let nextStage = '';
     let message = '';
+    const validStatuses = req.user.role === 'Admin' ? ['Acknowledged'] : ['Approved', 'Rejected'];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of ${validStatuses.join(', ')}` });
+    }
 
     if (req.user.role === 'HOD' && otClaim.status.hod === 'Pending' && req.user.department.equals(employee.department._id)) {
-      otClaim.status.hod = req.body.status;
-      if (req.body.status === 'Approved') {
+      if (otClaim.status.hod !== 'Pending') {
+        return res.status(400).json({ error: 'OT claim is not pending HOD approval' });
+      }
+      otClaim.status.hod = status;
+      if (status === 'Approved') {
         nextStage = 'ceo';
         message = `OT claim from ${employee.name} approved by HOD`;
       } else {
         message = `Your OT claim for ${new Date(otClaim.date).toDateString()} was rejected by HOD`;
       }
     } else if (req.user.role === 'CEO' && otClaim.status.hod === 'Approved' && otClaim.status.ceo === 'Pending') {
-      otClaim.status.ceo = req.body.status;
-      if (req.body.status === 'Approved') {
+      if (otClaim.status.ceo !== 'Pending') {
+        return res.status(400).json({ error: 'OT claim is not pending CEO approval' });
+      }
+      otClaim.status.ceo = status;
+      if (status === 'Approved') {
         nextStage = employee.loginType === 'Admin' ? '' : 'admin';
         message = `OT claim from ${employee.name} approved by CEO`;
       } else {
         message = `Your OT claim for ${new Date(otClaim.date).toDateString()} was rejected by CEO`;
       }
     } else if (req.user.role === 'Admin' && otClaim.status.ceo === 'Approved' && otClaim.status.admin === 'Pending') {
-      otClaim.status.admin = req.body.status;
-      message = `Your OT claim for ${new Date(otClaim.date).toDateString()} was ${req.body.status.toLowerCase()} by Admin`;
-      if (req.body.status === 'Approved') {
+      if (otClaim.status.admin !== 'Pending') {
+        return res.status(400).json({ error: 'OT claim is not pending Admin acknowledgment' });
+      }
+      otClaim.status.admin = status;
+      message = `Your OT claim for ${new Date(otClaim.date).toDateString()} was acknowledged by Admin`;
+      if (status === 'Acknowledged') {
         const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
         const isEligible = eligibleDepartments.includes(employee.department?.name);
         if (isEligible) {
@@ -229,6 +247,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
 
     await otClaim.save();
 
+    // Notify the employee of the approval/rejection/acknowledgment
     await Notification.create({
       userId: employee.employeeId,
       message,
@@ -239,31 +258,33 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
         .emit('notification', { message });
     }
 
-    if (nextStage) {
+    // Notify the next approver only if the claim was approved and there is a next stage
+    if ((status === 'Approved' || status === 'Acknowledged') && nextStage) {
       let nextApprover = null;
       if (nextStage === 'ceo') {
         nextApprover = await Employee.findOne({ loginType: 'CEO' });
       } else if (nextStage === 'admin') {
         nextApprover = await Employee.findOne({ loginType: 'Admin' });
-      } else if (nextApprover) {
-        await Notification.create({
-          userId: nextApprover.employeeId,
-          message: `New OT claim from ${employee.name} awaits your approval`,
-        });
-        if (global._io) {
-          global._io
-            .to(nextApprover.employeeId)
-            .emit('notification', {
-              message: `New OT claim from ${employee.name} awaits your approval`,
-            });
+        if (nextApprover) {
+          await Notification.create({
+            userId: nextApprover.employeeId,
+            message: `OT claim from ${employee.name} awaits your acknowledgment`,
+          });
+          if (global._io) {
+            global._io
+              .to(nextApprover.employeeId)
+              .emit('notification', {
+                message: `OT claim from ${employee.name} awaits your acknowledgment`,
+              });
+          }
         }
       }
     }
 
     await Audit.create({
       user: { id: req.user.id },
-      action: `${req.body.status} OT Claim`,
-      details: `${req.body.status} OT claim for ${employee.name} on ${new Date(otClaim.date).toDateString()}`,
+      action: `${status} OT Claim`,
+      details: `${status} OT claim for ${employee.name} on ${new Date(otClaim.date).toDateString()}`,
     });
 
     res.json(otClaim);
@@ -273,7 +294,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
   }
 });
 
-// Get OT Claims with Pagination and Filtering
+// Get OT Claims with Pagination and Filtering (unchanged)
 router.get('/', auth, role(['Employee', 'HOD', 'Admin', 'CEO']), async (req, res) => {
   try {
     const { status = 'all', fromDate, toDate, page = 1, limit = 10 } = req.query;
@@ -287,13 +308,10 @@ router.get('/', auth, role(['Employee', 'HOD', 'Admin', 'CEO']), async (req, res
         return res.status(400).json({ message: 'HOD has no valid department assigned' });
       }
       query.department = hod.department._id;
-      query['status.hod'] = 'Pending';
     } else if (req.user.role === 'CEO') {
       query['status.hod'] = 'Approved';
-      query['status.ceo'] = 'Pending';
     } else if (req.user.role === 'Admin') {
       query['status.ceo'] = 'Approved';
-      query['status.admin'] = 'Pending';
     }
 
     if (status !== 'all') {

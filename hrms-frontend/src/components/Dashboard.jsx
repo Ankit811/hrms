@@ -72,7 +72,7 @@ function Dashboard() {
         // Attendance Data
         const attendanceByDate = attendanceView === 'monthly'
           ? Array.from({ length: endOfMonth.getDate() }, (_, i) => {
-              const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
+            const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
               const count = attendance.data.filter(
                 (a) =>
                   a.status === 'Present' &&
@@ -129,9 +129,7 @@ function Dashboard() {
   return (
     <ContentLayout title="Dashboard">
       <div className="flex flex-col items-center w-full">
-        {/* Metric Cards */}
         <div className="flex flex-col items-center w-full max-w-[1200px]">
-          {/* First Row: Employee Category Cards */}
           <div className="flex justify-center gap-20 w-full">
             <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
               <CardHeader className="p-2">
@@ -178,7 +176,9 @@ function Dashboard() {
             </Card>
             <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
               <CardHeader className="p-2">
-                <CardTitle className="text-lg font-semibold text-yellow-800 text-center">Pending Leaves</CardTitle>
+                <CardTitle className="text-lg font-semibold text-yellow-800 text-center">
+                  {user.loginType === 'Admin' ? 'Pending Acknowledgement' : 'Pending Leaves'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-2">
                 <p className="text-3xl font-bold text-yellow-600 text-center">{data.pendingLeaves}</p>
@@ -187,7 +187,6 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Graphs */}
         <div className="mt-8 grid grid-cols-1 gap-6 w-full max-w-[900px]">
           <Card>
             <CardHeader>
