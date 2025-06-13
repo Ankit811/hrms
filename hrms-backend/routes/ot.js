@@ -40,7 +40,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       return res.status(400).json({ error: 'OT claim must be submitted by 11:59 PM the next day' });
     }
 
-    const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
+    const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
     const isEligible = eligibleDepartments
       .map(d => d.toLowerCase())
       .includes(employee.department?.name?.toLowerCase());
@@ -218,7 +218,7 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       otClaim.status.admin = status;
       message = `Your OT claim for ${new Date(otClaim.date).toDateString()} was acknowledged by Admin`;
       if (status === 'Acknowledged') {
-        const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
+        const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
         const isEligible = eligibleDepartments.includes(employee.department?.name);
         if (isEligible) {
           const attendance = await Attendance.findOne({

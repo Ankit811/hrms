@@ -370,7 +370,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       .limit(10);
 
     // Fetch unclaimed and claimed OT entries from Attendance for eligible departments
-    const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
+    const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
     const isEligible = employee.department && eligibleDepartments.includes(employee.department.name);
 
     let unclaimedOTRecords = [];

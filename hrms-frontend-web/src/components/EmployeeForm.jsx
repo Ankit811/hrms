@@ -95,7 +95,7 @@ function EmployeeForm() {
           api.get('/employees')
         ]);
         setDepartments(deptRes.data);
-        setManagers(empRes.data.filter(emp => ['HOD', 'Admin', 'CEO', 'CIO'].includes(emp.loginType)));
+        setManagers(empRes.data.filter(emp => ['HOD', 'Admin', 'CEO', 'CIO'].includes(emp.loginType))); //CIO can be removed or New login type with CIO can be created in future.
       } catch (err) {
         console.error('Error fetching data:', err);
       }

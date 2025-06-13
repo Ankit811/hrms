@@ -81,7 +81,7 @@ mongoose.connect(process.env.MONGO_URI)
         console.log('GridFS initialized successfully');
 
         // Schedule syncAttendance at 9:30 AM and 2:00 PM daily
-        cron.schedule('30 9 * * *', async () => {
+        cron.schedule('10 10 * * *', async () => {
           console.log('Running syncAttendance at 9:30 AM...');
           await syncAttendance();
           console.log('syncAttendance at 9:30 AM completed.');
@@ -94,14 +94,14 @@ mongoose.connect(process.env.MONGO_URI)
         });
 
         // Schedule processLateArrivalsAndAbsents at 9:30 AM daily
-        cron.schedule('30 9 * * *', async () => {
+        cron.schedule('11 10 * * *', async () => {
           console.log('Running processLateArrivalsAndAbsents at 9:30 AM...');
           await processLateArrivalsAndAbsents();
           console.log('processLateArrivalsAndAbsents at 9:30 AM completed.');
         });
 
         // Schedule processUnclaimedOT at 12:30 AM daily
-        cron.schedule('35 9 * * *', async () => {
+        cron.schedule('30 9 * * *', async () => {
           console.log('Running processUnclaimedOT at 12:30 AM... for the timing at 9:30 AM');
           await processUnclaimedOT();
           console.log('processUnclaimedOT at 12:30 AM completed.');

@@ -69,7 +69,7 @@ function EmployeeDashboard() {
       const employeeRes = await api.get('/dashboard/employee-info');
       const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, department } = employeeRes.data;
 
-      const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
+      const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
       const isDeptEligible = department && department.name && eligibleDepartments.includes(department.name);
       setIsEligible(isDeptEligible);
 

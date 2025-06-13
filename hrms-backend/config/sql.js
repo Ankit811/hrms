@@ -3,7 +3,7 @@ const sql = require('mssql');
 const sqlConfig = {
   user: process.env.SQL_USER || 'essl',
   password: process.env.SQL_PASSWORD || 'essl',
-  server: '192.168.1.7', // remove instance from here
+  server: '192.168.1.52', // remove instance from here
   database: process.env.SQL_DATABASE || 'etimetracklite1old',
   options: {
     encrypt: false,

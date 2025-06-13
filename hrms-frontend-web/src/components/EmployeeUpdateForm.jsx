@@ -458,7 +458,6 @@ function EmployeeUpdateForm({ employee, onUpdate }) {
                   value={form.employeeId}
                   onChange={handleChange}
                   className={errors.employeeId ? 'border-red-500' : ''}
-                  disabled
                 />
                 {errors.employeeId && <p className="mt-1 text-sm text-red-500">{errors.employeeId}</p>}
               </div>

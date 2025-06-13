@@ -12,7 +12,7 @@ async function processUnclaimedOT() {
     yesterday.setHours(0, 0, 0, 0);
 
     // Eligible departments
-    const eligibleDepartments = ['Production', 'Testing', 'AMETL', 'Admin'];
+    const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
     const eligibleDeptIds = await Department.find({ name: { $in: eligibleDepartments } }).select('_id');
 
     // Find attendance records with unclaimed OT from yesterday
