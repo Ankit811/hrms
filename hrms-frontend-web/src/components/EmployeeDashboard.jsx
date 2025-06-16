@@ -258,7 +258,7 @@ function EmployeeDashboard() {
               </CardContent>
             </Card>
           )}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>Leave Application Records</CardTitle>
             </CardHeader>
@@ -398,7 +398,7 @@ function EmployeeDashboard() {
                 </div>
               </CardContent>
             </Card>
-          )}
+          )} */}
         </div>
       </div>
     </ContentLayout>

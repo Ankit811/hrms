@@ -62,7 +62,7 @@ function Navbar() {
         subItems: [
           { text: 'Approve Leave', path: '/hod/approve-leave' },
           { text: 'Approve OD', path: '/hod/approve-od' },
-          ...(user?.department?.name && ['Production', 'Testing', 'AMETL', 'Admin'].includes(user.department.name)
+          ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name)
             ? [{ text: 'Approve OT', path: '/hod/approve-ot' }]
             : []),
         ],
@@ -73,6 +73,11 @@ function Navbar() {
       { text: 'Apply Leave', path: '/employee/leave' },
       { text: 'Apply OD', path: '/employee/od' },
       { text: 'OD List', path: '/employee/od-list' },
+      { text: 'Leave List', path: '/employee/leave-list' },
+      ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name)
+        ? [{ text: 'OT List', path: '/employee/approve-ot' }]
+        : []),
+      { text: 'Attendance', path: '/employee/attendance' },
     ],
   };
 
@@ -377,4 +382,3 @@ function Navbar() {
 }
 
 export default Navbar;
-

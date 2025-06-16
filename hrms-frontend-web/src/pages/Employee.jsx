@@ -6,6 +6,9 @@ import LeaveForm from '../components/LeaveForm';
 import ODForm from '../components/ODForm';
 import ODList from '../components/ODList';
 import MyDashboard from '../components/EmployeeDashboard';
+import LeaveList from '../components/LeaveList';
+import Attendance from '../components/Attendance';
+import ApproveOT from '../components/OTApproval';
 
 function Employee() {
   return (
@@ -18,6 +21,9 @@ function Employee() {
           <Route path="leave" element={<LeaveForm />} />
           <Route path="od" element={<ODForm />} />
           <Route path="od-list" element={<ODList />} />
+          <Route path="leave-list" element={<LeaveList />} />
+          <Route path="attendance" element={<Attendance />} />
+          <Route path="approve-ot" element={<ApproveOT />} />
         </Routes>
       </div>
     </div>

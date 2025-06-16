@@ -12,4 +12,7 @@ const attendanceSchema = new mongoose.Schema({
   ot: { type: Number, default: 0 }, // Overtime in minutes
 }, { timestamps: true });
 
+// Add unique index to prevent duplicate attendance records for the same employee and date
+attendanceSchema.index({ employeeId: 1, logDate: 1 }, { unique: true });
+
 module.exports = mongoose.model('Attendance', attendanceSchema);
