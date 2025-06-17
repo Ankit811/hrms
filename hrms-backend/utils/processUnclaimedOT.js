@@ -63,7 +63,7 @@ async function processUnclaimedOT() {
         let compensatoryHours = 0;
         if (otHours >= 8) {
           compensatoryHours = 8; // Full-day
-        } else if (otHours >= 4) {
+        } else if (otHours >= 5) {
           compensatoryHours = 4; // Half-day
         }
 
