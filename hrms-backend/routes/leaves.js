@@ -6,10 +6,12 @@ const Audit = require('../models/Audit');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const Department = require('../models/Department');
+const { upload, uploadToGridFS, gfsReady } = require('../middleware/fileupload');
+const { getGfs } = require('../utils/gridfs');
 const router = express.Router();
 
 // Submit Leave
-router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
+router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medicalCertificate'), async (req, res) => {
   try {
     const user = await Employee.findById(req.user.id);
     if (!user) {
@@ -25,6 +27,8 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     const currentYear = new Date().getFullYear();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
 
     const leaveDays = req.body.halfDay ? 0.5 :
       (req.body.fullDay?.from && req.body.fullDay?.to
@@ -38,14 +42,24 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     if (req.body.halfDay?.date) {
       leaveStart = new Date(req.body.halfDay.date);
       leaveEnd = new Date(req.body.halfDay.date);
-      if (leaveStart < today) {
-        return res.status(400).json({ message: 'Half day date cannot be in the past' });
+      if (leaveStart < today && req.body.leaveType !== 'Medical' && req.body.leaveType !== 'Emergency') {
+        return res.status(400).json({ message: 'Half day date cannot be in the past for this leave type' });
       }
     } else if (req.body.fullDay?.from && req.body.fullDay?.to) {
       leaveStart = new Date(req.body.fullDay.from);
       leaveEnd = new Date(req.body.fullDay.to);
-      if (leaveStart < today) {
-        return res.status(400).json({ message: 'Full day from date cannot be in the past' });
+      if (req.body.leaveType === 'Medical') {
+        if (leaveStart < sevenDaysAgo || leaveStart > today) {
+          return res.status(400).json({ message: 'Medical leave from date must be within today and 7 days prior' });
+        }
+      } else if (req.body.leaveType === 'Emergency') {
+        if (leaveStart.getTime() !== today.getTime() || leaveEnd.getTime() !== today.getTime()) {
+          return res.status(400).json({ message: 'Emergency leave must be for the current date only' });
+        }
+      } else {
+        if (leaveStart <= today) {
+          return res.status(400).json({ message: 'Full day from date must be after today for this leave type' });
+        }
       }
       if (leaveStart > leaveEnd) {
         return res.status(400).json({ message: 'Leave start date cannot be after end date' });
@@ -58,6 +72,15 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     const isConfirmed = user.employeeType === 'Confirmed';
     const joinDate = new Date(user.dateOfJoining);
     const yearsOfService = (new Date() - joinDate) / (1000 * 60 * 60 * 24 * 365);
+
+    let medicalCertificateId = null;
+    if (leaveType === 'Medical') {
+      if (!req.file) {
+        return res.status(400).json({ message: 'Medical certificate is required for Medical leave' });
+      }
+      const fileData = await uploadToGridFS(req.file, { employeeId: user.employeeId, leaveType: 'Medical' });
+      medicalCertificateId = fileData._id;
+    }
 
     switch (leaveType) {
       case 'Casual':
@@ -90,7 +113,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
         if (!isConfirmed || user.gender !== 'Female') return res.status(400).json({ message: 'Maternity leave is only for confirmed female employees.' });
         if (yearsOfService < 1) return res.status(400).json({ message: 'Must have completed one year of service.' });
         if (leaveDays !== 90) return res.status(400).json({ message: 'Maternity leave must be 90 days.' });
-        if (user.maternityClaims >= 2) return res.status(400).json({ message: 'Maternity leave can only be availed twice during service.' });
+        if (user.maternityClaims >= 2) return res.status(400).json({ message: 'Maternity leave can only be availed Heavy twice during service.' });
         break;
       case 'Paternity':
         if (!isConfirmed || user.gender !== 'Male') return res.status(400).json({ message: 'Paternity leave is only for confirmed male employees.' });
@@ -136,6 +159,24 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
           return res.status(400).json({ message: `Selected entry (${entry.hours} hours) does not match leave duration (${leaveDays === 0.5 ? 'Half Day (4 hours)' : 'Full Day (8 hours)'})` });
         }
         break;
+      case 'Emergency':
+        if (!user.canApplyEmergencyLeave) {
+          return res.status(403).json({ message: 'You are not authorized to apply for Emergency leave' });
+        }
+        if (leaveDays > 1) {
+          return res.status(400).json({ message: 'Emergency leave must be half day or one full day' });
+        }
+        if (req.user.role === 'HOD') {
+          const ceo = await Employee.findOne({ loginType: 'CEO' });
+          if (!ceo || !ceo.canApplyEmergencyLeave) {
+            return res.status(403).json({ message: 'CEO approval required for HOD to apply for Emergency leave' });
+          }
+        }
+        const canTakeEmergencyLeave = await user.checkConsecutivePaidLeaves(leaveStart, leaveEnd);
+        if (!canTakeEmergencyLeave) {
+          return res.status(400).json({ message: 'Cannot take more than 3 consecutive paid leave days.' });
+        }
+        break;
       case 'Leave Without Pay(LWP)':
         break;
       default:
@@ -166,6 +207,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       compensatoryEntryId: req.body.compensatoryEntryId,
       projectDetails: req.body.projectDetails,
       restrictedHoliday: req.body.restrictedHoliday,
+      medicalCertificate: medicalCertificateId,
       status
     });
 
@@ -197,6 +239,10 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
 // Get Leaves
 router.get('/', auth, async (req, res) => {
   try {
+    if (!gfsReady()) {
+      return res.status(500).json({ message: 'GridFS is not initialized' });
+    }
+    const gfs = getGfs();
     const user = await Employee.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -277,7 +323,29 @@ router.get('/', auth, async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    res.json({ leaves, total });
+    // Manually fetch medical certificate filenames for Medical leaves
+    const leavesWithCertificates = await Promise.all(leaves.map(async (leave) => {
+      let medicalCertificate = null;
+      if (leave.leaveType === 'Medical' && leave.medicalCertificate) {
+        try {
+          const file = await gfs.find({ _id: leave.medicalCertificate }).toArray();
+          if (file[0]) {
+            medicalCertificate = {
+              _id: file[0]._id,
+              filename: file[0].filename
+            };
+          }
+        } catch (err) {
+          console.error(`Error fetching file ${leave.medicalCertificate} for leave ${leave._id}:`, err);
+        }
+      }
+      return {
+        ...leave.toObject(), // Convert Mongoose document to plain object
+        medicalCertificate
+      };
+    }));
+
+    res.json({ leaves: leavesWithCertificates, total });
   } catch (err) {
     console.error('Fetch leaves error:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -356,41 +424,68 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
 
     if (status === 'Acknowledged' && currentStage === 'admin') {
       const employee = leave.employee;
-        switch (leave.leaveType) {
-          case 'Casual':
+      switch (leave.leaveType) {
+        case 'Casual':
           await employee.deductPaidLeaves(
             leave.fullDay?.from || leave.halfDay?.date,
-            leave.fullDay?.to || leave.halfDay?.date
+            leave.fullDay?.to || leave.halfDay?.date,
+            leave.leaveType
           );
-            break;
-          case 'Medical':
-          employee.medicalLeaves -= leave.halfDay ? 0.5 :
+          break;
+        case 'Medical':
+          await employee.deductMedicalLeaves(leave,
+            leave.halfDay ? 0.5 :
+            (leave.fullDay?.from && leave.fullDay?.to
+              ? ((new Date(leave.fullDay.to) - new Date(leave.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
+              : 0));
+          break;
+        case 'Maternity':
+          await employee.recordMaternityClaim();
+          break;
+        case 'Paternity':
+          await employee.recordPaternityClaim();
+          break;
+        case 'Restricted Holidays':
+          await employee.deductRestrictedHolidays();
+          break;
+        case 'Compensatory':
+          const entry = employee.compensatoryAvailable.find(e => e._id.toString() === leave.compensatoryEntryId.toString());
+          if (entry) {
+            entry.status = 'Used';
+          }
+          await employee.deductCompensatoryLeaves(leave.compensatoryEntryId);
+          break;
+        case 'Emergency':
+          const leaveDays = leave.halfDay ? 0.5 :
             (leave.fullDay?.from && leave.fullDay?.to
               ? ((new Date(leave.fullDay.to) - new Date(leave.fullDay.from)) / (1000 * 60 * 60 * 24)) + 1
               : 0);
-            break;
-          case 'Maternity':
-            employee.maternityClaims += 1;
-            break;
-          case 'Paternity':
-            employee.paternityClaims += 1;
-            break;
-          case 'Restricted Holidays':
-            employee.restrictedHolidays -= 1;
-            break;
-          case 'Compensatory':
-            const entry = employee.compensatoryAvailable.find(e => e._id.toString() === leave.compensatoryEntryId.toString());
-            if (entry) {
-              entry.status = 'Used';
-            }
-            break;
+          if (employee.paidLeaves >= leaveDays) {
+            await employee.deductPaidLeaves(
+              leave.fullDay?.from || leave.halfDay?.date,
+              leave.fullDay?.to || leave.halfDay?.date,
+              leave.leaveType
+            );
+          } else {
+            await employee.incrementUnpaidLeaves(
+              leave.fullDay?.from || leave.halfDay?.date,
+              leave.fullDay?.to || leave.halfDay?.date,
+              leave.leaveType
+            );
+          }
+          break;
         case 'Leave Without Pay(LWP)':
+          await employee.incrementUnpaidLeaves(
+            leave.fullDay?.from || leave.halfDay?.date,
+            leave.fullDay?.to || leave.halfDay?.date,
+            leave.leaveType
+          );
           break;
         default:
           return res.status(400).json({ message: 'Invalid leave type for balance update' });
       }
 
-        await employee.save();
+      await employee.save();
     }
 
     if (status === 'Rejected') {

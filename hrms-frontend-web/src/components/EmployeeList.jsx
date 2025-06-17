@@ -153,19 +153,29 @@ function EmployeeList() {
   };
 
   const handleUpdateSuccess = (updatedEmployee) => {
-  console.log('handleUpdateSuccess called, updatedEmployee:', updatedEmployee);
+    console.log('handleUpdateSuccess called, updatedEmployee:', updatedEmployee);
 
-  // Ensure department is populated
-  if (typeof updatedEmployee.department === 'string') {
-    updatedEmployee.department = departments.find(d => d._id === updatedEmployee.department);
-  }
+    // Ensure department is populated
+    if (typeof updatedEmployee.department === 'string') {
+      updatedEmployee.department = departments.find(d => d._id === updatedEmployee.department);
+    }
 
-  setEmployees((prevEmployees) =>
-    prevEmployees.map(emp =>
-      emp._id === updatedEmployee._id ? { ...emp, ...updatedEmployee } : emp
-    )
-  );
-};
+    setEmployees((prevEmployees) =>
+      prevEmployees.map(emp =>
+        emp._id === updatedEmployee._id ? { ...emp, ...updatedEmployee } : emp
+      )
+    );
+  };
+
+  const handleEmployeeUpdate = (updatedEmployee) => {
+    console.log('handleEmployeeUpdate called, updatedEmployee:', updatedEmployee);
+    setEmployees((prevEmployees) =>
+      prevEmployees.map(emp =>
+        emp._id === updatedEmployee._id ? { ...emp, ...updatedEmployee } : emp
+      )
+    );
+    setSelectedEmployeeForDetails(updatedEmployee);
+  };
 
   console.log('Rendering EmployeeList, loading:', loading, 'error:', error, 'employees:', employees.length);
 
@@ -244,57 +254,57 @@ function EmployeeList() {
             </div>
           ) : (
             <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedEmployees.map(emp => (
-                  <TableRow key={emp._id}>
-                    <TableCell>{emp.employeeId}</TableCell>
-                    <TableCell>{emp.name}</TableCell>
-                    <TableCell>{emp.department?.name || 'N/A'}</TableCell>
-                    <TableCell className="space-x-2">
-                      <Button
-                        onClick={() => handleViewDetails(emp)}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        View
-                      </Button>
-                      {loginType === 'Admin' && (
-                        <>
-                          <EmployeeUpdateForm
-                            employee={emp}
-                            onUpdate={handleUpdateSuccess}
-                          />
-                          <Button
-                            onClick={() => handleDelete(emp._id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Delete
-                          </Button>
-                        </>
-                      )}
-                    </TableCell>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <Pagination
-              currentPage={currentPage}
-              itemsPerPage={itemsPerPage}
-              totalItems={filteredEmployees.length}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={(size) => {
-                setItemsPerPage(size);
-                setCurrentPage(1);
-              }}
-            />
+                </TableHeader>
+                <TableBody>
+                  {paginatedEmployees.map(emp => (
+                    <TableRow key={emp._id}>
+                      <TableCell>{emp.employeeId}</TableCell>
+                      <TableCell>{emp.name}</TableCell>
+                      <TableCell>{emp.department?.name || 'N/A'}</TableCell>
+                      <TableCell className="space-x-2">
+                        <Button
+                          onClick={() => handleViewDetails(emp)}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          View
+                        </Button>
+                        {loginType === 'Admin' && (
+                          <>
+                            <EmployeeUpdateForm
+                              employee={emp}
+                              onUpdate={handleUpdateSuccess}
+                            />
+                            <Button
+                              onClick={() => handleDelete(emp._id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Pagination
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={filteredEmployees.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(size) => {
+                  setItemsPerPage(size);
+                  setCurrentPage(1);
+                }}
+              />
             </>
           )}
           {showDetails && selectedEmployeeForDetails && (
@@ -312,6 +322,7 @@ function EmployeeList() {
                   setError('Failed to toggle section lock. Please try again.');
                 }
               }}
+              onEmployeeUpdate={handleEmployeeUpdate}
             />
           )}
         </div>

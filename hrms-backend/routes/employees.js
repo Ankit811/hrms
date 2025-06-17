@@ -479,7 +479,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     if (updates.dateOfBirth) updates.dateOfBirth = new Date(updates.dateOfBirth);
     if (updates.dateOfJoining) updates.dateOfJoining = new Date(updates.dateOfJoining);
     if (updates.dateOfResigning) updates.dateOfResigning = new Date(updates.dateOfResigning);
-    if (updates.confirmationDate) updates.confirmationDate = new Date(updates.confirmationDate);
+    if (updates.confirmationDate) updates.confirmationDate = new Date(updates.dateOfResigning);
     if (updates.paymentType === 'Bank Transfer' && (!updates.bankName || !updates.bankBranch || !updates.accountNumber || !updates.ifscCode)) {
       return res.status(400).json({ message: 'Bank details are required for bank transfer payment type' });
     }
@@ -598,12 +598,14 @@ router.delete('/:id', auth, role(['Admin']), ensureGfs, async (req, res) => {
 
     try {
       await Audit.create({
-        action: 'delete_employee',
-        user: req.user?.id || 'unknown',
+        type: 'delete_employee',
+        action: 'delete',
+        user: req.user.id || 'unknown',
+        dept: 'HR',
         details: `Deleted employee ${employee.employeeId}`
       });
     } catch (auditErr) {
-      console.warn('Audit logging failed:', auditErr.message);
+      console.warn('Audit deletion failed:', audit.err.message);
     }
 
     res.status(200).json({ message: 'Employee deleted successfully' });
@@ -706,8 +708,7 @@ router.patch('/:id/lock-section', auth, role(['Admin']), async (req, res) => {
   }
 });
 
-router.post(
-  '/upload-excel',
+router.post('/upload-excel',
   auth,
   role(['Admin']),
   excelUpload.single('excel'),
@@ -796,7 +797,7 @@ router.post(
               dateOfResigning: row.status === 'Resigned' ? parseExcelDate(row.dateOfResigning) : null,
               employeeType: row.status === 'Working' ? row.employeeType : null,
               probationPeriod: row.status === 'Working' && row.employeeType === 'Probation' ? row.probationPeriod : null,
-              confirmationDate: row.status === 'Working' && row.employeeType === 'Probation' ? parseExcelDate(row.dateOfConfirmationDate) : null,
+              confirmationDate: row.status === 'Working' && row.employeeType === 'Probation' ? parseExcelDate(row.confirmationDate) : null,
               reportingManager: reportingManagerId,
               status: row.status || '',
               referredBy: row.referredBy || '',
@@ -848,5 +849,56 @@ router.post(
     }
   }
 );
+
+// Toggle Emergency Leave Permission (HOD for subordinates, CEO for HODs)
+router.patch('/:id/emergency-leave-permission', auth, role(['Admin', 'HOD', 'CEO']), async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    const user = await Employee.findById(req.user.id);//admin
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Authorization checks
+    if (req.user.role === 'HOD' ) {
+      // HOD can only toggle for non-HOD employees in their department
+      if (employee.loginType !== 'Employee' || employee.department.toString() !== user.department.toString()) {
+        return res.status(403).json({ message: 'Not authorized to toggle Emergency Leave permission for this employee' });
+      }
+    } else if (req.user.role === 'CEO') {
+      // CEO can only toggle for HODs
+      if (employee.loginType !== 'HOD') {
+        return res.status(400).json({ message: 'CEO can only toggle Emergency Leave permission for HODs' });
+      }
+    }
+
+    // Toggle the canApplyEmergencyLeave field
+    employee.canApplyEmergencyLeave = !employee.canApplyEmergencyLeave;
+    const updatedEmployee = await employee.save();
+    const populatedEmployee = await Employee.findById(updatedEmployee._id).populate('department reportingManager');
+
+    console.log(`Emergency Leave permission for employee ${employee.employeeId} toggled to: ${updatedEmployee.canApplyEmergencyLeave}`);
+
+    // Audit logging
+    try {
+      await Audit.create({
+        action: 'toggle_emergency_leave_permission',
+        user: req.user.id || 'unknown',
+        details: `Toggled Emergency Leave permission for employee ${employee.employeeId} to ${employee.canApplyEmergencyLeave}`
+      });
+    } catch (auditErr) {
+      console.warn('Audit logging failed:', auditErr.message);
+    }
+
+    res.json(populatedEmployee);
+  } catch (err) {
+    console.error('Error toggling Emergency Leave permission:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
 
 module.exports = router;

@@ -37,6 +37,7 @@ import Pagination from "./Pagination";
 import api from "../services/api";
 import ContentLayout from "./ContentLayout";
 import { AuthContext } from "../context/AuthContext";
+import { useFileHandler } from "../hooks/useFileHandler";
 
 function LeaveList() {
   const { user } = useContext(AuthContext);
@@ -67,6 +68,10 @@ function LeaveList() {
   const [rejectionRemarks, setRejectionRemarks] = useState("");
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [pendingRejection, setPendingRejection] = useState(null);
+
+  const { handleViewFile, error: fileError } = useFileHandler(
+    selectedLeave?.medicalCertificate?._id
+  );
 
   const fetchLeaves = useCallback(async (filterParams) => {
     setLoading(true);
@@ -229,6 +234,20 @@ function LeaveList() {
     setPendingRejection(null);
   };
 
+  // Calculate leave duration
+  const getLeaveDuration = (leave) => {
+    if (leave.halfDay?.date) {
+      return "Half Day";
+    }
+    if (leave.fullDay?.from && leave.fullDay?.to) {
+      const from = new Date(leave.fullDay.from);
+      const to = new Date(leave.fullDay.to);
+      const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      return `${days} Day${days > 1 ? 's' : ''}`;
+    }
+    return "N/A";
+  };
+
   const hodDepartmentName =
     user?.loginType === "HOD" && user?.department
       ? departments.find((dep) => dep._id === user.department._id)?.name ||
@@ -242,6 +261,11 @@ function LeaveList() {
           {error && (
             <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
               {error}
+            </div>
+          )}
+          {fileError && (
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+              {fileError}
             </div>
           )}
           <motion.div
@@ -569,7 +593,7 @@ function LeaveList() {
                       <strong>Leave Type:</strong> {selectedLeave.leaveType}
                     </p>
                     <p>
-                      <strong>Leave Duration:</strong> {selectedLeave.leaveduration}
+                      <strong>Leave Duration:</strong> {getLeaveDuration(selectedLeave)}
                     </p>
                     <p>
                       <strong>Reason:</strong> {selectedLeave.reason}
@@ -596,6 +620,19 @@ function LeaveList() {
                       <p>
                         <strong>Restricted Holiday:</strong>{" "}
                         {selectedLeave.restrictedHoliday}
+                      </p>
+                    )}
+                    {selectedLeave.medicalCertificate && (
+                      <p>
+                        <strong>Medical Certificate:</strong>{" "}
+                        <Button
+                          size="sm"
+                          onClick={handleViewFile}
+                          className="bg-blue-600 text-white"
+                          disabled={fileError}
+                        >
+                          View {selectedLeave.medicalCertificate.filename}
+                        </Button>
                       </p>
                     )}
                     <p>

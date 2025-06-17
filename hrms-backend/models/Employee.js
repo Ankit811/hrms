@@ -100,6 +100,13 @@ const employeeSchema = new mongoose.Schema({
   lastMonthlyReset: { type: Date }, // For Casual leaves (Non-Confirmed)
   lastMedicalReset: { type: Date }, // For Medical leaves
   lastRestrictedHolidayReset: { type: Date }, // For Restricted Holiday
+  canApplyEmergencyLeave: { type: Boolean, default: false }, // Added field for Emergency Leave permission
+  attendanceHistory: [{ // New field for attendance history
+    date: { type: Date, required: true },
+    status: { type: String, enum: ['Present', 'Absent', 'On Leave'], required: true },
+    leaveType: { type: String, default: null },
+    leaveId: { type: mongoose.Schema.Types.ObjectId, ref: 'Leave', default: null }
+  }]
 }, { timestamps: true });
 
 // Middleware to handle password hashing
@@ -260,7 +267,7 @@ employeeSchema.methods.checkConsecutivePaidLeaves = async function(newLeaveStart
 
   const leaves = await Leave.find({
     employeeId: this.employeeId,
-    leaveType: { $in: ['Casual', 'Medical', 'Maternity', 'Paternity', 'Restricted Holidays'] }, // All paid leave types
+    leaveType: { $in: ['Casual', 'Medical', 'Maternity', 'Paternity', 'Restricted Holidays', 'Emergency'] }, // Added Emergency leave type
     'status.hod': 'Approved',
     'status.admin': 'Approved',
     'status.ceo': 'Approved',
@@ -289,8 +296,8 @@ employeeSchema.methods.checkConsecutivePaidLeaves = async function(newLeaveStart
   return totalDays <= 3;
 };
 
-// Method to deduct paid leaves (Casual only)
-employeeSchema.methods.deductPaidLeaves = async function(leaveStart, leaveEnd) {
+// Method to deduct paid leaves (Casual or Emergency)
+employeeSchema.methods.deductPaidLeaves = async function(leaveStart, leaveEnd, leaveType) {
   if (!leaveStart || !leaveEnd) return;
 
   const normalizeDate = (date) => {
@@ -309,15 +316,33 @@ employeeSchema.methods.deductPaidLeaves = async function(leaveStart, leaveEnd) {
     days = ((leaveEnd - leaveStart) / (1000 * 60 * 60 * 24)) + 1;
   }
 
-  console.log(`Deducting ${days} days for Casual leave from ${leaveStart.toISOString()} to ${leaveEnd.toISOString()} for employee ${this.employeeId}`);
+  console.log(`Deducting ${days} days for ${leaveType || 'Casual'} leave from ${leaveStart.toISOString()} to ${leaveEnd.toISOString()} for employee ${this.employeeId}`);
 
   this.paidLeaves = Math.max(0, this.paidLeaves - days);
   await this.save();
 };
 
 // Method to deduct medical leaves
-employeeSchema.methods.deductMedicalLeaves = async function(days) {
+employeeSchema.methods.deductMedicalLeaves = async function(leave, days) {
   this.medicalLeaves = Math.max(0, this.medicalLeaves - days);
+
+  // Update attendance history
+  const startDate = new Date(leave.fullDay.from);
+  const endDate = new Date(leave.fullDay.to);
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  const attendanceRecords = [];
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    attendanceRecords.push({
+      date: new Date(d),
+      status: 'Leave',
+      leaveType: 'Medical',
+      leaveId: leave._id
+    });
+  }
+
+  this.attendanceHistory.push(...attendanceRecords);
   await this.save();
 };
 
@@ -363,7 +388,7 @@ employeeSchema.methods.recordPaternityClaim = async function() {
 };
 
 // Method to increment unpaid leaves taken
-employeeSchema.methods.incrementUnpaidLeaves = async function(leaveStart, leaveEnd) {
+employeeSchema.methods.incrementUnpaidLeaves = async function(leaveStart, leaveEnd, leaveType) {
   if (!leaveStart || !leaveEnd) return;
 
   const normalizeDate = (date) => {
@@ -381,6 +406,8 @@ employeeSchema.methods.incrementUnpaidLeaves = async function(leaveStart, leaveE
   } else {
     days = ((leaveEnd - leaveStart) / (1000 * 60 * 60 * 24)) + 1;
   }
+
+  console.log(`Incrementing ${days} days for ${leaveType || 'Unpaid'} leave from ${leaveStart.toISOString()} to ${leaveEnd.toISOString()} for employee ${this.employeeId}`);
 
   this.unpaidLeavesTaken = (this.unpaidLeavesTaken || 0) + days;
   await this.save();
