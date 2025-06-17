@@ -53,6 +53,7 @@ function Attendance() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [total, setTotal] = useState(0);
+  const [absenceAlerts, setAbsenceAlerts] = useState({}); // New state for absence alerts
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -99,6 +100,16 @@ function Attendance() {
       setAttendance(attendanceData);
       setTotal(res.data.total || 0);
 
+      // Fetch absence alerts for admin
+      if (user?.loginType === "Admin") {
+        const alertsRes = await api.get("/attendance/absence-alerts");
+        const alerts = alertsRes.data.reduce((acc, alert) => {
+          acc[alert.employeeId] = alert;
+          return acc;
+        }, {});
+        setAbsenceAlerts(alerts);
+      }
+
       // Log duplicates for debugging
       const keyCounts = {};
       attendanceData.forEach((record) => {
@@ -125,7 +136,7 @@ function Attendance() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (user?.loginType === "HOD" && user?.department) {
@@ -183,6 +194,26 @@ function Attendance() {
     } catch (err) {
       console.error("Error downloading Excel:", err);
       setError("Failed to download attendance report");
+    }
+  };
+
+  const handleSendNotification = async (employeeId, alertType) => {
+    try {
+      await api.post("/attendance/send-absence-notification", {
+        employeeId,
+        alertType,
+      });
+      setError(null);
+      // Refresh alerts after sending notification
+      const alertsRes = await api.get("/attendance/absence-alerts");
+      const alerts = alertsRes.data.reduce((acc, alert) => {
+        acc[alert.employeeId] = alert;
+        return acc;
+      }, {});
+      setAbsenceAlerts(alerts);
+    } catch (err) {
+      console.error("Error sending notification:", err);
+      setError(err.response?.data?.message || "Failed to send notification");
     }
   };
 
@@ -331,6 +362,9 @@ function Attendance() {
                       <TableHead className="font-semibold">Time OUT</TableHead>
                       <TableHead className="font-semibold">Status</TableHead>
                       <TableHead className="font-semibold">OT</TableHead>
+                      {user?.loginType === "Admin" && (
+                        <TableHead className="font-semibold">Action</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -350,6 +384,33 @@ function Attendance() {
                           {a.halfDay ? ` (${a.halfDay})` : ""}
                         </TableCell>
                         <TableCell>{formatTime(a.ot)}</TableCell>
+                        {user?.loginType === "Admin" && (
+                          <TableCell>
+                            {absenceAlerts[a.employeeId]?.days === 3 && (
+                              <Button
+                                onClick={() =>
+                                  handleSendNotification(a.employeeId, "warning")
+                                }
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                              >
+                                Send Warning
+                              </Button>
+                            )}
+                            {absenceAlerts[a.employeeId]?.days === 5 && (
+                              <Button
+                                onClick={() =>
+                                  handleSendNotification(
+                                    a.employeeId,
+                                    "termination"
+                                  )
+                                }
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Send Termination Notice
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

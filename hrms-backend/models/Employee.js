@@ -110,7 +110,7 @@ employeeSchema.pre('save', async function(next) {
   next();
 });
 
-// Middleware to handle leave allocation and reset
+// Middleware to handle leave allocation, reset, and over and above leave adjustment
 employeeSchema.pre('save', async function(next) {
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -181,6 +181,57 @@ employeeSchema.pre('save', async function(next) {
   if (!lastRestrictedResetYear || lastRestrictedResetYear < currentYear) {
     this.restrictedHolidays = 1; // Reset Restricted Holiday to 1 for new year
     this.lastRestrictedHolidayReset = new Date(currentYear, 0, 1);
+  }
+
+  // Handle over and above leaves for confirmed employees on resignation
+  if (this.isModified('status') && this.status === 'Resigned' && this.employeeType === 'Confirmed') {
+    const joinDate = new Date(this.dateOfJoining);
+    const resignDate = new Date(this.dateOfResigning);
+    const joinYear = joinDate.getFullYear();
+    const resignYear = resignDate.getFullYear();
+
+    // Only process if resignation is in the same year as joining or current year
+    if (joinYear <= currentYear && resignYear === currentYear) {
+      const joinMonth = joinDate.getMonth(); // 0 = January, 11 = December
+      const resignMonth = resignDate.getMonth();
+      // Calculate months worked in the resignation year
+      const monthsWorked = joinYear === resignYear ? (resignMonth - joinMonth + 1) : (resignMonth + 1);
+      // Entitled paid leaves based on months worked (1 per month, max 12)
+      const entitledLeaves = Math.min(monthsWorked, 12);
+      // Calculate approved paid leaves taken in the resignation year
+      const leaves = await Leave.find({
+        employeeId: this.employeeId,
+        leaveType: 'Casual', // Only consider Casual leaves
+        'status.hod': 'Approved',
+        'status.admin': 'Acknowledged',
+        'status.ceo': 'Approved',
+        $or: [
+          { 'fullDay.from': { $gte: new Date(currentYear, 0, 1), $lte: new Date(currentYear, 11, 31) } },
+          { 'halfDay.date': { $gte: new Date(currentYear, 0, 1), $lte: new Date(currentYear, 11, 31) } },
+        ],
+      });
+
+      let totalPaidLeavesTaken = 0;
+      for (const leave of leaves) {
+        if (leave.halfDay?.date) {
+          totalPaidLeavesTaken += 0.5;
+        } else if (leave.fullDay?.from && leave.fullDay?.to) {
+          const from = new Date(leave.fullDay.from);
+          const to = new Date(leave.fullDay.to);
+          from.setHours(0, 0, 0, 0);
+          to.setHours(0, 0, 0, 0);
+          totalPaidLeavesTaken += ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+        }
+      }
+
+      // Calculate over and above leaves
+      const overAndAboveLeaves = Math.max(0, totalPaidLeavesTaken - entitledLeaves);
+      if (overAndAboveLeaves > 0) {
+        // Shift over and above paid leaves to unpaid leaves
+        this.paidLeaves = Math.max(0, this.paidLeaves - overAndAboveLeaves);
+        this.unpaidLeavesTaken = (this.unpaidLeavesTaken || 0) + overAndAboveLeaves;
+      }
+    }
   }
 
   next();

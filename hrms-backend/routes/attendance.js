@@ -4,6 +4,7 @@ const Employee = require('../models/Employee');
 const Leave = require('../models/Leave');
 const OD = require('../models/OD');
 const Department = require('../models/Department');
+const Notification = require('../models/Notification');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const XLSX = require('xlsx');
@@ -93,6 +94,163 @@ router.get('/', auth, async (req, res) => {
     res.json({ attendance, total: attendance.length });
   } catch (err) {
     console.error('Error fetching attendance:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+router.get('/absence-alerts', auth, role(['Admin']), async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fiveDaysAgo = new Date(today);
+    fiveDaysAgo.setDate(today.getDate() - 5);
+
+    const employees = await Employee.find({ status: 'Working' }).select('employeeId department');
+    const alerts = [];
+
+    for (const employee of employees) {
+      const attendanceRecords = await Attendance.find({
+        employeeId: employee.employeeId,
+        logDate: { $gte: fiveDaysAgo, $lte: today },
+        status: 'Absent',
+      }).sort({ logDate: 1 }).lean();
+
+      const leaves = await Leave.find({
+        employeeId: employee.employeeId,
+        'status.ceo': 'Approved',
+        $or: [
+          { 'fullDay.from': { $gte: fiveDaysAgo, $lte: today } },
+          { 'fullDay.to': { $gte: fiveDaysAgo, $lte: today } },
+          { 'halfDay.date': { $gte: fiveDaysAgo, $lte: today } },
+        ],
+      }).lean();
+
+      const ods = await OD.find({
+        employeeId: employee.employeeId,
+        'status.ceo': 'Approved',
+        dateOut: { $lte: today },
+        dateIn: { $gte: fiveDaysAgo },
+      }).lean();
+
+      // Create a map of approved leave/OD dates
+      const approvedDates = new Set();
+      leaves.forEach(leave => {
+        if (leave.halfDay?.date) {
+          approvedDates.add(new Date(leave.halfDay.date).toISOString().split('T')[0]);
+        } else if (leave.fullDay?.from && leave.fullDay?.to) {
+          let current = new Date(leave.fullDay.from);
+          const to = new Date(leave.fullDay.to);
+          while (current <= to) {
+            approvedDates.add(current.toISOString().split('T')[0]);
+            current.setDate(current.getDate() + 1);
+          }
+        }
+      });
+      ods.forEach(od => {
+        let current = new Date(od.dateOut);
+        const to = new Date(od.dateIn);
+        while (current <= to) {
+          approvedDates.add(current.toISOString().split('T')[0]);
+          current.setDate(current.getDate() + 1);
+        }
+      });
+
+      // Filter unapproved absences
+      const unapprovedAbsences = attendanceRecords.filter(record => {
+        const dateStr = new Date(record.logDate).toISOString().split('T')[0];
+        return !approvedDates.has(dateStr);
+      });
+
+      // Check for consecutive absences
+      let consecutiveDays = 0;
+      let lastDate = null;
+      for (const record of unapprovedAbsences) {
+        const currentDate = new Date(record.logDate);
+        currentDate.setHours(0, 0, 0, 0);
+        if (lastDate && (currentDate - lastDate) / (1000 * 60 * 60 * 24) === 1) {
+          consecutiveDays++;
+        } else {
+          consecutiveDays = 1;
+        }
+        lastDate = currentDate;
+      }
+
+      if (consecutiveDays === 3 || consecutiveDays === 5) {
+        alerts.push({
+          employeeId: employee.employeeId,
+          days: consecutiveDays,
+        });
+      }
+    }
+
+    res.json(alerts);
+  } catch (err) {
+    console.error('Error fetching absence alerts:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+router.post('/send-absence-notification', auth, role(['Admin']), async (req, res) => {
+  try {
+    const { employeeId, alertType } = req.body;
+    if (!employeeId || !['warning', 'termination'].includes(alertType)) {
+      return res.status(400).json({ message: 'Invalid employeeId or alertType' });
+    }
+
+    const employee = await Employee.findOne({ employeeId }).populate('department');
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    if (alertType === 'warning') {
+      await Notification.create({
+        userId: employee.employeeId,
+        message: `Warning: You have been absent without prior leave approval for 3 consecutive days. Please contact HR immediately.`,
+      });
+      if (global._io) {
+        global._io.to(employee.employeeId).emit('notification', {
+          message: `Warning: You have been absent without prior leave approval for 3 consecutive days. Please contact HR immediately.`,
+        });
+      }
+    } else if (alertType === 'termination') {
+      const hod = await Employee.findOne({ department: employee.department._id, loginType: 'HOD' });
+      const ceo = await Employee.findOne({ loginType: 'CEO' });
+
+      await Notification.create([
+        {
+          userId: employee.employeeId,
+          message: `Termination Notice: You have been absent without prior leave approval for 5 consecutive days. Your employment may be terminated. Please contact HR immediately.`,
+        },
+        ...(hod ? [{
+          userId: hod.employeeId,
+          message: `Termination Notice: Employee ${employee.name} (${employee.employeeId}) has been absent without prior leave approval for 5 consecutive days.`,
+        }] : []),
+        ...(ceo ? [{
+          userId: ceo.employeeId,
+          message: `Termination Notice: Employee ${employee.name} (${employee.employeeId}) has been absent without prior leave approval for 5 consecutive days.`,
+        }] : []),
+      ]);
+
+      if (global._io) {
+        global._io.to(employee.employeeId).emit('notification', {
+          message: `Termination Notice: You have been absent without prior leave approval for 5 consecutive days. Your employment may be terminated. Please contact HR immediately.`,
+        });
+        if (hod) {
+          global._io.to(hod.employeeId).emit('notification', {
+            message: `Termination Notice: Employee ${employee.name} (${employee.employeeId}) has been absent without prior leave approval for 5 consecutive days.`,
+          });
+        }
+        if (ceo) {
+          global._io.to(ceo.employeeId).emit('notification', {
+            message: `Termination Notice: Employee ${employee.name} (${employee.employeeId}) has been absent without prior leave approval for 5 consecutive days.`,
+          });
+        }
+      }
+    }
+
+    res.json({ message: 'Notification sent successfully' });
+  } catch (err) {
+    console.error('Error sending absence notification:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

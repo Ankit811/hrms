@@ -162,7 +162,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
   try {
     const { employeeId } = req.user;
     const employee = await Employee.findOne({ employeeId })
-      .select('employeeType paidLeaves restrictedHolidays compensatoryLeaves department')
+      .select('employeeType paidLeaves restrictedHolidays compensatoryLeaves department designation')
       .populate('department', 'name');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -180,6 +180,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
       restrictedHolidays: employee.restrictedHolidays,
       compensatoryLeaves: employee.compensatoryLeaves,
       department: employee.department,
+      designation: employee.designation, // Added designation
     });
   } catch (err) {
     console.error('Error fetching employee info:', err);
@@ -243,7 +244,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     }
 
     const employee = await Employee.findOne({ employeeId })
-      .select('employeeType department compensatoryAvailable')
+      .select('employeeType department compensatoryAvailable designation')
       .populate('department');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -371,21 +372,21 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
 
     // Fetch unclaimed and claimed OT entries from Attendance for eligible departments
     const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
-    const isEligible = employee.department && eligibleDepartments.includes(employee.department.name);
+    const eligibleDesignations = ['Technician', 'Sr. Technician', 'Junior Engineer'];
+    const isEligible = employee.department && eligibleDepartments.includes(employee.department.name) &&
+    eligibleDesignations.includes(employee.designation);
 
     let unclaimedOTRecords = [];
     let claimedOTRecords = [];
 
-    if (isEligible) {
-      // Fetch all attendance records with OT
+    if (isEligible || employee.department) { // Allow non-eligible for Sundays
       const otAttendanceQuery = {
         employeeId,
         logDate: { $gte: new Date(fromDate), $lte: new Date(toDate) },
-        ot: { $gt: 0 }, // OT in minutes
+        ot: { $gt: 0 },
       };
       const otAttendanceRecords = await Attendance.find(otAttendanceQuery).sort({ logDate: -1 });
 
-      // Fetch all OT claims for the employee in the date range
       const otClaims = await OT.find({
         employeeId,
         date: { $gte: new Date(fromDate), $lte: new Date(toDate) },
@@ -406,14 +407,16 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           return !isClaimed;
         })
         .map((record) => {
-          const deadline = new Date(record.logDate);
-          deadline.setDate(deadline.getDate() + 1);
-          deadline.setHours(23, 59, 59, 999); // 11:59:59 PM of next day
-
+          let deadline = null;
+          if (isEligible) {
+            deadline = new Date(record.logDate);
+            deadline.setDate(deadline.getDate() + 1);
+            deadline.setHours(23, 59, 59, 999);
+          }
           return {
             _id: record._id,
             date: record.logDate,
-            hours: (record.ot / 60).toFixed(1), // Convert minutes to hours
+            hours: (record.ot / 60).toFixed(1),
             day: new Date(record.logDate).toLocaleString('en-US', { weekday: 'long' }),
             claimDeadline: deadline,
           };
@@ -430,7 +433,8 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           ceo: claim.status.ceo,
         },
         projectDetails: claim.projectDetails,
-        claimType: claim.claimType, // Full or Partial
+        paymentAmount: claim.paymentAmount,
+        compensatoryHours: claim.compensatoryHours,
       }));
     }
 

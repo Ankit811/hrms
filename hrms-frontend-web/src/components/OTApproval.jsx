@@ -349,13 +349,10 @@ function OTApproval() {
                   <TableHead className="font-semibold">Employee</TableHead>
                   <TableHead className="font-semibold">Date</TableHead>
                   <TableHead className="font-semibold">Hours</TableHead>
-                  <TableHead className="font-semibold">Claim Type</TableHead>
                   <TableHead className="font-semibold">View</TableHead>
                   <TableHead className="font-semibold">Status (HOD)</TableHead>
                   <TableHead className="font-semibold">Status (CEO)</TableHead>
-                  <TableHead className="font-semibold">
-                    Status (Admin)
-                  </TableHead>
+                  <TableHead className="font-semibold">Status (Admin)</TableHead>
                   {["HOD", "Admin", "CEO"].includes(user?.loginType) && (
                     <TableHead className="font-semibold">Action</TableHead>
                   )}
@@ -365,26 +362,14 @@ function OTApproval() {
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={
-                        ["HOD", "Admin", "CEO"].includes(user?.loginType)
-                          ? 9
-                          : 8
-                      }
-                      className="text-center py-4"
-                    >
+                      colSpan={["HOD", "Admin", "CEO"].includes(user?.loginType) ? 8 : 7} className="text-center py-4">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : claims.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={
-                        ["HOD", "Admin", "CEO"].includes(user?.loginType)
-                          ? 9
-                          : 8
-                      }
-                      className="text-center py-4"
-                    >
+                      colSpan={["HOD", "Admin", "CEO"].includes(user?.loginType) ? 8 : 7} className="text-center py-4">
                       No OT claim records found.
                     </TableCell>
                   </TableRow>
@@ -396,7 +381,6 @@ function OTApproval() {
                         {new Date(claim.date).toLocaleDateString()}
                       </TableCell>
                       <TableCell>{claim.hours}</TableCell>
-                      <TableCell>{claim.claimType || "N/A"}</TableCell>
                       <TableCell>
                         <Button
                           size="sm"
@@ -526,10 +510,6 @@ function OTApproval() {
                     </p>
                     <p>
                       <strong>Hours:</strong> {selectedClaim.hours}
-                    </p>
-                    <p>
-                      <strong>Claim Type:</strong>{" "}
-                      {selectedClaim.claimType || "N/A"}
                     </p>
                     <p>
                       <strong>Project Details:</strong>{" "}

@@ -74,9 +74,10 @@ function Navbar() {
       { text: 'Apply OD', path: '/employee/od' },
       { text: 'OD List', path: '/employee/od-list' },
       { text: 'Leave List', path: '/employee/leave-list' },
-      ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name)
-        ? [{ text: 'OT List', path: '/employee/approve-ot' }]
-        : []),
+      ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name) &&
+      user?.designation && ['Technician', 'Sr. Technician', 'Junior Engineer'].includes(user.designation)
+      ? [{ text: 'OT List', path: '/employee/approve-ot' }]
+      : []),
       { text: 'Attendance', path: '/employee/attendance' },
     ],
   };

@@ -49,60 +49,43 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     }
 
     const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
-    const isEligible = eligibleDepartments
-      .map(d => d.toLowerCase())
-      .includes(employee.department?.name?.toLowerCase());
-      let attendanceRecord;
-      if (isEligible) {
-        attendanceRecord = await Attendance.findOne({
-        employeeId: employee.employeeId,
-          logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate },
-          ot: { $gte: 60 }
-        });
-      if (!attendanceRecord) {
-        return res.status(400).json({ error: 'No OT recorded for this date' });
-      }
-      const recordedOtHours = attendanceRecord.ot / 60;
-      if (hours > recordedOtHours) {
-        return res.status(400).json({ error: `Claimed hours (${hours}) exceed recorded OT (${recordedOtHours.toFixed(1)})` });
-      }
-      if (recordedOtHours > 4 && !claimType) {
-        return res.status(400).json({ error: 'Claim type (Full/Partial) is required for OT > 4 hours' });
-      }
-      if (claimType === 'Partial' && hours !== recordedOtHours - (recordedOtHours >= 8 ? 8 : 4)) {
-        return res.status(400).json({ error: `Partial claim must be for ${recordedOtHours - (recordedOtHours >= 8 ? 8 : 4)} hours` });
-      }
-    } else {
-      if (otDate.getDay() !== 0) {
-        return res.status(400).json({ error: 'OT claims for non-eligible departments are only allowed for Sundays' });
-      }
-      attendanceRecord = await Attendance.findOne({
-        employeeId: employee.employeeId,
-        logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate },
-      });
-      if (!attendanceRecord) {
-        return res.status(400).json({ error: 'No attendance recorded for this date' });
-      }
-      const recordedOtHours = attendanceRecord.ot / 60;
-      if (hours > recordedOtHours) {
-        return res.status(400).json({ error: `Claimed hours (${hours}) exceed recorded OT (${recordedOtHours.toFixed(1)})` });
-      }
-      if (hours < 4) {
-        return res.status(400).json({ error: 'Compensatory leave requires at least 4 hours' });
-      }
+    const eligibleDesignations = ['Technician', 'Sr. Technician', 'Junior Engineer'];
+    const isEligible = eligibleDepartments.includes(user.department.name) &&
+    eligibleDesignations.includes(user.designation);
+    const isSunday = otDate.getDay() === 0;
+
+    let attendanceRecord = await Attendance.findOne({
+      employeeId: user.employeeId,
+      logDate: { $gte: normalizedOtDate, $lte: normalizedOtDate },
+    });
+     if (!attendanceRecord) {
+      return res.status(400).json({ error: 'No attendance recorded for this date' });
+    }
+    const recordedOtHours = attendanceRecord.ot / 60;
+    if (hours > recordedOtHours) {
+      return res.status(400).json({ error: `Claimed hours (${hours}) exceed recorded OT (${recordedOtHours.toFixed(1)})` });
     }
 
     let compensatoryHours = 0;
     let paymentAmount = 0;
+
     if (isEligible) {
-      if (!claimType || claimType === 'Full') {
-        paymentAmount = hours * 500 * 1.5;
-      } else if (claimType === 'Partial') {
-        paymentAmount = (hours - (attendanceRecord.ot >= 8 * 60 ? 8 : 4)) * 500 * 1.5;
-        compensatoryHours = attendanceRecord.ot >= 8 * 60 ? 8 : 4;
+      // Eligible employees: Payment only, minimum 1 hour, within deadline
+      if (hours < 1) return res.status(400).json({ error: 'Hours must be at least 1' });
+      const claimDeadline = new Date(normalizedOtDate);
+      claimDeadline.setDate(claimDeadline.getDate() + 1);
+      claimDeadline.setHours(23, 59, 59, 999);
+      if (now > claimDeadline) {
+        return res.status(400).json({ error: 'OT claim must be submitted by 11:59 PM the next day' });
       }
+      paymentAmount = hours * 500 * 1.5; // Example rate
+    } else if (isSunday) {
+      // Non-eligible employees: Compensatory leave for Sundays
+      if (hours < 4) return res.status(400).json({ error: 'Compensatory leave requires at least 4 hours' });
+      compensatoryHours = hours >= 8 ? 8 : 4;
     } else {
-      compensatoryHours = hours >= 4 && hours < 8 ? 4 : hours >= 8 ? 8 : 0;
+      // Non-eligible employees on non-Sundays: No OT
+      return res.status(400).json({ error: 'OT claims are not allowed for non-eligible employees on non-Sundays' });
     }
 
     const status = {
@@ -118,14 +101,12 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       employeeId: user.employeeId,
       employee: user._id,
       name: user.name,
-      designation: user.designation,
       department: user.department,
       date,
       hours,
       projectDetails,
-      claimType,
-      compensatoryHours: claimType === 'Compensatory' ? compensatoryHours : 0,
-      paymentAmount: claimType === 'Payment' ? paymentAmount : 0,
+      compensatoryHours,
+      paymentAmount,
       status
     });
 
@@ -236,7 +217,7 @@ router.get('/', auth, async (req, res) => {
 // Approve OT
 router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res) => {
   try {
-    const otClaim = await OTClaim.findById(req.params.id).populate('employee');
+    const otClaim = await OTClaim.findById(req.params.id).populate('employee department');
     if (!otClaim) {
       return res.status(404).json({ message: 'OT claim not found' });
     }
@@ -295,7 +276,7 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
       }
     } else if (status === 'Acknowledged' && currentStage === 'admin') {
       const employee = await Employee.findById(otClaim.employee);
-      if (employee && otClaim.claimType === 'Compensatory') {
+      if (employee && otClaim.compensatoryHours > 0) {
         employee.compensatoryAvailable.push({
           hours: otClaim.compensatoryHours,
           date: otClaim.date,
@@ -306,7 +287,7 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
     }
 
     await otClaim.save();
-    await Audit.create({ user: user.employeeId, action: `${status} OT`, details: `${status} OT claim for ${ot.name}` });
+    await Audit.create({ user: user.employeeId, action: `${status} OT`, details: `${status} OT claim for ${otClaim.name}` });
 
     const employee = await Employee.findById(otClaim.employee);
     if (employee) {

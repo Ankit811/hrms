@@ -391,12 +391,6 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
       }
 
         await employee.save();
-
-      await Notification.create({
-        userId: employee.employeeId,
-        message: `Your ${leave.leaveType} leave request has been acknowledged by Admin`,
-      });
-      if (global._io) global._io.to(employee.employeeId).emit('notification', { message: `Your ${leave.leaveType} leave request has been acknowledged by Admin` });
     }
 
     if (status === 'Rejected') {

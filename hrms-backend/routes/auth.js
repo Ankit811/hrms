@@ -62,6 +62,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         employeeId: user.employeeId,
         email: user.email,
         department: user.department ? { name: user.department.name } : null, // Include department name
+        designation: user.designation,
       },
     });
   } catch (err) {
@@ -74,7 +75,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = await Employee.findById(req.user.id)
-      .select('-password')
+      .select('_id loginType name email employeeId department designation')
       .populate('department'); // Populate department field
     if (!user) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -86,6 +87,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       email: user.email,
       employeeId: user.employeeId,
       department: user.department ? { name: user.department.name } : null, // Include department name
+      designation: user.designation,
     });
   } catch (err) {
     console.error('Error fetching user:', err);

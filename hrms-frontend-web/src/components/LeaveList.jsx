@@ -569,6 +569,9 @@ function LeaveList() {
                       <strong>Leave Type:</strong> {selectedLeave.leaveType}
                     </p>
                     <p>
+                      <strong>Leave Duration:</strong> {selectedLeave.leaveduration}
+                    </p>
+                    <p>
                       <strong>Reason:</strong> {selectedLeave.reason}
                     </p>
                     <p>
