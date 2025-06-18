@@ -123,25 +123,31 @@ function LeaveForm() {
     if (form.fullDay.from && form.fullDay.to && new Date(form.fullDay.to) < new Date(form.fullDay.from)) {
       return 'To Date cannot be earlier than From Date';
     }
+
+    // Compute today in IST
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 7);
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istTime = new Date(today.getTime() + istOffset);
+    istTime.setUTCHours(0, 0, 0, 0); // Midnight IST
+
+    const sevenDaysAgo = new Date(istTime);
+    sevenDaysAgo.setDate(istTime.getDate() - 7);
+
     if (form.duration === 'half' && form.halfDay.date && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
       const halfDayDate = new Date(form.halfDay.date);
-      if (halfDayDate < today) {
+      if (halfDayDate < istTime) {
         return 'Half Day date cannot be in the past for this leave type';
       }
     }
     if (form.duration === 'full' && form.fullDay.from && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
       const fromDate = new Date(form.fullDay.from);
-      if (fromDate <= today) {
+      if (fromDate <= istTime) {
         return 'From Date must be after today for this leave type';
       }
     }
     if (form.leaveType === 'Medical' && form.duration === 'full' && form.fullDay.from) {
       const fromDate = new Date(form.fullDay.from);
-      if (fromDate < sevenDaysAgo || fromDate > today) {
+      if (fromDate < sevenDaysAgo || fromDate > istTime) {
         return 'Medical leave From Date must be within today and 7 days prior';
       }
     }
@@ -153,16 +159,26 @@ function LeaveForm() {
       if (leaveDays > 1) {
         return 'Emergency leave must be half day or one full day';
       }
+      const todayStr = istTime.toISOString().split('T')[0];
       if (form.duration === 'half' && form.halfDay.date) {
-        const halfDayDate = new Date(form.halfDay.date);
-        if (halfDayDate.getTime() !== today.getTime()) {
+        const halfDayDateStr = form.halfDay.date;
+        console.log('Emergency Validation (Frontend):', {
+          todayStr,
+          halfDayDateStr
+        });
+        if (halfDayDateStr !== todayStr) {
           return 'Emergency leave must be for the current date only';
         }
       }
       if (form.duration === 'full' && form.fullDay.from && form.fullDay.to) {
-        const fromDate = new Date(form.fullDay.from);
-        const toDate = new Date(form.fullDay.to);
-        if (fromDate.getTime() !== today.getTime() || toDate.getTime() !== today.getTime()) {
+        const fromDateStr = form.fullDay.from;
+        const toDateStr = form.fullDay.to;
+        console.log('Emergency Validation (Frontend):', {
+          todayStr,
+          fromDateStr,
+          toDateStr
+        });
+        if (fromDateStr !== todayStr || toDateStr !== todayStr) {
           return 'Emergency leave must be for the current date only';
         }
       }
@@ -189,7 +205,7 @@ function LeaveForm() {
       }
     }
     if (form.leaveType === 'Medical') {
-      console.log('Validating Medical leave, user:', user, 'employeeType:', user?.employeeType); // Debug log
+      console.log('Validating Medical leave, user:', user, 'employeeType:', user?.employeeType);
       if (!user || user.employeeType !== 'Confirmed') {
         return 'Medical leave is only available for Confirmed employees';
       }
@@ -257,10 +273,10 @@ function LeaveForm() {
       const leaveData = new FormData();
       leaveData.append('leaveType', form.leaveType);
       if (form.duration === 'full') {
-        leaveData.append('fullDay[from]', form.fullDay.from ? new Date(form.fullDay.from).toISOString() : null);
-        leaveData.append('fullDay[to]', form.fullDay.to ? new Date(form.fullDay.to).toISOString() : null);
+        leaveData.append('fullDay[from]', form.fullDay.from || '');
+        leaveData.append('fullDay[to]', form.fullDay.to || '');
       } else if (form.duration === 'half') {
-        leaveData.append('halfDay[date]', form.halfDay.date ? new Date(form.halfDay.date).toISOString() : null);
+        leaveData.append('halfDay[date]', form.halfDay.date || '');
         leaveData.append('halfDay[session]', form.halfDay.session);
       }
       leaveData.append('reason', form.reason);
@@ -275,6 +291,12 @@ function LeaveForm() {
       if (form.medicalCertificate) {
         leaveData.append('medicalCertificate', form.medicalCertificate);
       }
+      console.log('Submitting FormData:', {
+        leaveType: form.leaveType,
+        halfDayDate: form.halfDay.date,
+        fullDayFrom: form.fullDay.from,
+        fullDayTo: form.fullDay.to
+      });
 
       await api.post('/leaves', leaveData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -293,7 +315,6 @@ function LeaveForm() {
         duration: '',
         medicalCertificate: null
       });
-      // Refresh compensatory data
       const res = await api.get('/dashboard/employee-info');
       setCompensatoryBalance(res.data.compensatoryLeaves || 0);
       setCompensatoryEntries(res.data.compensatoryAvailable || []);
@@ -307,15 +328,19 @@ function LeaveForm() {
     }
   };
 
+  // Compute date constraints in IST
   const today = new Date();
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(today.getDate() - 7);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istTime = new Date(today.getTime() + istOffset);
+  istTime.setUTCHours(0, 0, 0, 0); // Midnight IST
+  const sevenDaysAgo = new Date(istTime);
+  sevenDaysAgo.setDate(istTime.getDate() - 7);
+  const tomorrow = new Date(istTime);
+  tomorrow.setDate(istTime.getDate() + 1);
   const minDateMedical = sevenDaysAgo.toISOString().split('T')[0];
-  const maxDateMedical = today.toISOString().split('T')[0];
+  const maxDateMedical = istTime.toISOString().split('T')[0];
   const minDateOther = tomorrow.toISOString().split('T')[0];
-  const currentDate = today.toISOString().split('T')[0];
+  const currentDate = istTime.toISOString().split('T')[0];
 
   return (
     <ContentLayout title="Apply for Leave">

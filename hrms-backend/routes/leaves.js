@@ -26,7 +26,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
 
     const currentYear = new Date().getFullYear();
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0); // Use UTC to align with YYYY-MM-DD
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(today.getDate() - 7);
 
@@ -40,20 +40,55 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
 
     let leaveStart, leaveEnd;
     if (req.body.halfDay?.date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(req.body.halfDay.date)) {
+        return res.status(400).json({ message: 'Invalid half day date format (expected YYYY-MM-DD)' });
+      }
       leaveStart = new Date(req.body.halfDay.date);
       leaveEnd = new Date(req.body.halfDay.date);
-      if (leaveStart < today && req.body.leaveType !== 'Medical' && req.body.leaveType !== 'Emergency') {
+      if (isNaN(leaveStart.getTime())) {
+        return res.status(400).json({ message: 'Invalid half day date' });
+      }
+      if (req.body.leaveType === 'Emergency') {
+        const todayStr = today.toISOString().split('T')[0];
+        const leaveStartStr = leaveStart.toISOString().split('T')[0];
+        console.log('Emergency Half-Day Validation:', {
+          todayStr,
+          leaveStartStr,
+          rawHalfDayDate: req.body.halfDay.date,
+          serverTime: new Date().toString()
+        });
+        if (leaveStartStr !== todayStr) {
+          return res.status(400).json({ message: 'Emergency leave must be for the current date only' });
+        }
+      } else if (req.body.leaveType !== 'Medical' && leaveStart < today) {
         return res.status(400).json({ message: 'Half day date cannot be in the past for this leave type' });
       }
     } else if (req.body.fullDay?.from && req.body.fullDay?.to) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(req.body.fullDay.from) || !/^\d{4}-\d{2}-\d{2}$/.test(req.body.fullDay.to)) {
+        return res.status(400).json({ message: 'Invalid full day date format (expected YYYY-MM-DD)' });
+      }
       leaveStart = new Date(req.body.fullDay.from);
       leaveEnd = new Date(req.body.fullDay.to);
+      if (isNaN(leaveStart.getTime()) || isNaN(leaveEnd.getTime())) {
+        return res.status(400).json({ message: 'Invalid full day date' });
+      }
       if (req.body.leaveType === 'Medical') {
         if (leaveStart < sevenDaysAgo || leaveStart > today) {
           return res.status(400).json({ message: 'Medical leave from date must be within today and 7 days prior' });
         }
       } else if (req.body.leaveType === 'Emergency') {
-        if (leaveStart.getTime() !== today.getTime() || leaveEnd.getTime() !== today.getTime()) {
+        const todayStr = today.toISOString().split('T')[0];
+        const leaveStartStr = leaveStart.toISOString().split('T')[0];
+        const leaveEndStr = leaveEnd.toISOString().split('T')[0];
+        console.log('Emergency Full-Day Validation:', {
+          todayStr,
+          leaveStartStr,
+          leaveEndStr,
+          rawFullDayFrom: req.body.fullDay.from,
+          rawFullDayTo: req.body.fullDay.to,
+          serverTime: new Date().toString()
+        });
+        if (leaveStartStr !== todayStr || leaveEndStr !== todayStr) {
           return res.status(400).json({ message: 'Emergency leave must be for the current date only' });
         }
       } else {

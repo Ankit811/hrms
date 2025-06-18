@@ -30,11 +30,11 @@ function Navbar() {
         ],
       },
       {
-        text: 'Approve',
+        text: 'Acknowledge',
         subItems: [
-          { text: 'Approve Leave', path: '/admin/approve-leave' },
-          { text: 'Approve OD', path: '/admin/approve-od' },
-          { text: 'Approve OT', path: '/admin/approve-ot' },
+          { text: 'Acknowledge Leave', path: '/admin/approve-leave' },
+          { text: 'Acknowledge OD', path: '/admin/approve-od' },
+          { text: 'Acknowledge OT', path: '/admin/approve-ot' },
         ],
       },
     ],
