@@ -5,6 +5,7 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const Employee = require('../models/Employee');
 const Department = require('../models/Department');
+const Leave = require('../models/Leave'); // Import Leave model
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const Audit = require('../models/Audit');
@@ -151,16 +152,69 @@ router.get('/', auth, role(['Admin', 'CEO']), async (req, res) => {
   }
 });
 
-// Get employees in HOD's department
-router.get('/department', auth, role(['HOD']), async (req, res) => {
+// Get employees in the same department, excluding those assigned to overlapping leaves
+router.get('/department', auth, role(['HOD', 'Employee']), async (req, res) => {
   try {
-    const { employeeId } = req.user;
-    const hod = await Employee.findOne({ employeeId }).populate('department');
-    if (!hod?.department?._id) {
-      return res.status(400).json({ message: 'HOD department not found' });
+    const { id, loginType } = req.user;
+    const { startDate, endDate } = req.query;
+    const user = await Employee.findById(id).populate('department');
+    if (!user?.department?._id) {
+      return res.status(400).json({ message: 'User department not found' });
     }
-    const employees = await Employee.find({ department: hod.department._id }).populate('department reportingManager');
-    console.log('Fetching department employees for HOD:', hod.department._id);
+
+    const query = {
+      department: user.department._id,
+      _id: { $ne: id }, // Exclude logged-in user
+    };
+    if (loginType === 'Employee') {
+      query.loginType = { $ne: 'HOD' }; // Exclude HODs for regular employees
+    }
+
+    let excludedEmployeeIds = [];
+    if (startDate && endDate) {
+      const parsedStart = new Date(startDate);
+      const parsedEnd = new Date(endDate);
+
+      if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+        return res.status(400).json({ message: 'Invalid date format' });
+      }
+      if (parsedEnd < parsedStart) {
+        return res.status(400).json({ message: 'End date must be after start date' });
+      }
+
+      const overlappingLeaves = await Leave.find({
+        $or: [
+          {
+            'fullDay.from': { $lte: parsedEnd },
+            'fullDay.to': { $gte: parsedStart },
+            $or: [
+              { 'status.hod': { $in: ['Pending', 'Approved'] } },
+              { 'status.ceo': { $in: ['Pending', 'Approved'] } },
+            ],
+          },
+          {
+            'halfDay.date': { $gte: parsedStart, $lte: parsedEnd },
+            $or: [
+              { 'status.hod': { $in: ['Pending', 'Approved'] } },
+              { 'status.ceo': { $in: ['Pending', 'Approved'] } },
+            ],
+          },
+        ],
+      }).select('chargeGivenTo');
+
+      excludedEmployeeIds = overlappingLeaves
+        .map((leave) => leave.chargeGivenTo?.toString())
+        .filter((id) => id);
+    }
+
+    if (excludedEmployeeIds.length > 0) {
+      query._id = { ...query._id, $nin: excludedEmployeeIds };
+    }
+
+    const employees = await Employee.find(query)
+      .select('_id name employeeId')
+      .populate('department', 'name');
+    console.log('Fetching department employees for:', loginType, user.department._id);
     console.log('Employees found:', employees.length);
     res.json(employees);
   } catch (err) {
@@ -288,7 +342,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
       files.aadharCard ? files.aadharCard[0].id : null,
       files.bankPassbook ? files.bankPassbook[0].id : null,
       files.medicalCertificate ? files.medicalCertificate[0].id : null,
-      files.backgroundVerification ? files.backgroundVerification[0].id : null
+      files.backgroundVerification ? files.backgroundVerification[0].id : null,
     ].filter(id => id !== null);
 
     const employee = new Employee({
@@ -333,7 +387,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
         bankName,
         bankBranch,
         accountNumber,
-        ifscCode
+        ifscCode,
       } : {},
       locked: true,
       basicInfoLocked: true,
@@ -342,7 +396,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
       documentsLocked: true,
       paymentLocked: true,
       paidLeaves: 12,
-      unpaidLeavesTaken: 0
+      unpaidLeavesTaken: 0,
     });
 
     const newEmployee = await employee.save();
@@ -352,7 +406,7 @@ router.post('/', auth, role(['Admin']), ensureGfs, ensureDbConnection, checkForF
       await Audit.create({
         action: 'create_employee',
         user: req.user?.id || 'unknown',
-        details: `Created employee ${employeeId}`
+        details: `Created employee ${employeeId}`,
       });
     } catch (auditErr) {
       console.warn('Audit logging failed:', auditErr.message);
@@ -398,14 +452,14 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
       'motherName', 'mobileNumber', 'permanentAddress', 'currentAddress', 'aadharNumber',
       'bloodGroup', 'gender', 'maritalStatus', 'spouseName', 'emergencyContactName', 'emergencyContactNumber',
       'dateOfJoining', 'reportingManager', 'status', 'dateOfResigning', 'employeeType', 'probationPeriod', 'confirmationDate',
-      'referredBy', 'loginType'
+      'referredBy', 'loginType',
     ];
     const positionFields = ['designation', 'location', 'department'];
     const statutoryFields = ['panNumber', 'pfNumber', 'uanNumber', 'esiNumber'];
     const documentFields = [
       'tenthTwelfthDocs', 'graduationDocs', 'postgraduationDocs', 'experienceCertificate',
       'salarySlips', 'panCard', 'aadharCard', 'bankPassbook', 'medicalCertificate',
-      'backgroundVerification', 'profilePicture'
+      'backgroundVerification', 'profilePicture',
     ];
     const paymentFields = ['paymentType', 'bankName', 'bankBranch', 'accountNumber', 'ifscCode'];
 
@@ -453,7 +507,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
       return res.status(400).json({ message: 'Mobile Number must be 10 digits' });
     }
     if (updates.password && updates.password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
     if (updates.status === 'Resigned' && !updates.dateOfResigning) {
       return res.status(400).json({ message: 'Date of Resigning is required for Resigned status' });
@@ -479,7 +533,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     if (updates.dateOfBirth) updates.dateOfBirth = new Date(updates.dateOfBirth);
     if (updates.dateOfJoining) updates.dateOfJoining = new Date(updates.dateOfJoining);
     if (updates.dateOfResigning) updates.dateOfResigning = new Date(updates.dateOfResigning);
-    if (updates.confirmationDate) updates.confirmationDate = new Date(updates.dateOfResigning);
+    if (updates.confirmationDate) updates.confirmationDate = new Date(updates.confirmationDate);
     if (updates.paymentType === 'Bank Transfer' && (!updates.bankName || !updates.bankBranch || !updates.accountNumber || !updates.ifscCode)) {
       return res.status(400).json({ message: 'Bank details are required for bank transfer payment type' });
     }
@@ -506,7 +560,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
     const docFields = [
       'tenthTwelfthDocs', 'graduationDocs', 'postgraduationDocs', 'experienceCertificate',
       'salarySlips', 'panCard', 'aadharCard', 'bankPassbook', 'medicalCertificate',
-      'backgroundVerification'
+      'backgroundVerification',
     ];
     const newDocumentIds = docFields
       .map(field => {
@@ -538,7 +592,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
         bankName: updates.bankName,
         bankBranch: updates.bankBranch,
         accountNumber: updates.accountNumber,
-        ifscCode: updates.ifscCode
+        ifscCode: updates.ifscCode,
       } : {};
     }
 
@@ -552,7 +606,7 @@ router.put('/:id', auth, ensureGfs, ensureDbConnection, checkForFiles, async (re
         action: 'update',
         user: req.user?.id || 'unknown',
         dept: 'HR',
-        details: `Updated employee ${employee.employeeId}`
+        details: `Updated employee ${employee.employeeId}`,
       });
     } catch (auditErr) {
       console.warn('Audit logging failed:', auditErr.message);
@@ -583,12 +637,12 @@ router.delete('/:id', auth, role(['Admin']), ensureGfs, async (req, res) => {
       await Promise.all(
         employee.documents.map(docId => {
           console.log('Deleting document:', docId);
-          try {
+        try {
             return getGfs().delete(new mongoose.Types.ObjectId(docId));
-          } catch (err) {
+        } catch (err) {
             console.warn(`Failed to delete document ${docId}: ${err.message}`);
             return null;
-          }
+        }
         })
       );
     }
@@ -602,7 +656,7 @@ router.delete('/:id', auth, role(['Admin']), ensureGfs, async (req, res) => {
         action: 'delete',
         user: req.user.id || 'unknown',
         dept: 'HR',
-        details: `Deleted employee ${employee.employeeId}`
+        details: `Deleted employee ${employee.employeeId}`,
       });
     } catch (auditErr) {
       console.warn('Audit deletion failed:', audit.err.message);
@@ -660,7 +714,7 @@ router.patch('/:id/lock', auth, role(['Admin']), async (req, res) => {
       await Audit.create({
         action: 'lock_unlock_employee',
         user: req.user?.id || 'unknown',
-        details: `Toggled lock for employee ${employee.employeeId} to ${employee.locked}`
+        details: `Toggled lock for employee ${employee.employeeId} to ${employee.locked}`,
       });
     } catch (auditErr) {
       console.warn('Audit logging failed:', auditErr.message);
@@ -695,7 +749,7 @@ router.patch('/:id/lock-section', auth, role(['Admin']), async (req, res) => {
       await Audit.create({
         action: 'lock_unlock_section',
         user: req.user?.id || 'unknown',
-        details: `Toggled ${section} lock for employee ${employee.employeeId} to ${employee[lockField]}`
+        details: `Toggled ${section} lock for employee ${employee.employeeId} to ${employee[lockField]}`,
       });
     } catch (auditErr) {
       console.warn('Audit logging failed:', auditErr.message);
@@ -713,142 +767,142 @@ router.post('/upload-excel',
   role(['Admin']),
   excelUpload.single('excel'),
   async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded.' });
-      }
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet);
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded.' });
+    }
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
 
-      const results = await Promise.all(
-        rows.map(async (row) => {
-          try {
+    const results = await Promise.all(
+      rows.map(async (row) => {
+        try {
             // Format validations (only if field exists)
-            if (row.aadharNumber && !/^\d{12}$/.test(row.aadharNumber)) {
-              throw new Error('Aadhar Number must be exactly 12 digits');
-            }
-            if (row.mobileNumber && !/^\d{10}$/.test(row.mobileNumber)) {
-              throw new Error('Mobile Number must be exactly 10 digits');
-            }
-            if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
-              throw new Error('Invalid email format');
-            }
-            if (row.panNumber && !/^[A-Z0-9]{10}$/.test(row.panNumber)) {
-              throw new Error('PAN Number must be 10 alphanumeric characters');
-            }
-            if (row.pfNumber && !/^\d{18}$/.test(row.pfNumber)) {
-              throw new Error('PF Number must be 18 digits');
-            }
-            if (row.uanNumber && !/^\d{12}$/.test(row.uanNumber)) {
-              throw new Error('UAN Number must be 12 digits');
-            }
-            if (row.esiNumber && !/^\d{12}$/.test(row.esiNumber)) {
-              throw new Error('ESI Number must be 12 digits');
-            }
-            if (row.bloodGroup && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(row.bloodGroup)) {
-              throw new Error('Invalid blood group');
-            }
-            if (row.status === 'Resigned' && !row.dateOfResigning) {
-              throw new Error('Date of Resigning is required for Resigned status');
-            }
-            if (row.status === 'Working' && !row.employeeType) {
-              throw new Error('Employee Type is required for Working status');
-            }
-            if (row.status === 'Working' && row.employeeType === 'Probation' && (!row.probationPeriod || !row.confirmationDate)) {
-              throw new Error('Probation period and confirmation date are required for Probation employee type');
-            }
+          if (row.aadharNumber && !/^\d{12}$/.test(row.aadharNumber)) {
+            throw new Error('Aadhar Number must be exactly 12 digits');
+          }
+          if (row.mobileNumber && !/^\d{10}$/.test(row.mobileNumber)) {
+            throw new Error('Mobile Number must be exactly 10 digits');
+          }
+          if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+            throw new Error('Invalid email format');
+          }
+          if (row.panNumber && !/^[A-Z0-9]{10}$/.test(row.panNumber)) {
+            throw new Error('PAN Number must be 10 alphanumeric characters');
+          }
+          if (row.pfNumber && !/^\d{18}$/.test(row.pfNumber)) {
+            throw new Error('PF Number must be 18 digits');
+          }
+          if (row.uanNumber && !/^\d{12}$/.test(row.uanNumber)) {
+            throw new Error('UAN Number must be 12 digits');
+          }
+          if (row.esiNumber && !/^\d{12}$/.test(row.esiNumber)) {
+            throw new Error('ESI Number must be 12 digits');
+          }
+          if (row.bloodGroup && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(row.bloodGroup)) {
+            throw new Error('Invalid blood group');
+          }
+          if (row.status === 'Resigned' && !row.dateOfResigning) {
+            throw new Error('Date of Resigning is required for Resigned status');
+          }
+          if (row.status === 'Working' && !row.employeeType) {
+            throw new Error('Employee Type is required for Working status');
+          }
+          if (row.status === 'Working' && row.employeeType === 'Probation' && (!row.probationPeriod || !row.confirmationDate)) {
+            throw new Error('Probation period and confirmation date are required for Probation employee type');
+          }
 
             // Department population if department is provided
-            let departmentId = null;
-            if (row.department) {
-              const dept = await Department.findOne({ name: row.department });
-              if (dept) departmentId = dept._id;
-            }
+          let departmentId = null;
+          if (row.department) {
+            const dept = await Department.findOne({ name: row.department });
+            if (dept) departmentId = dept._id;
+          }
 
             // Reporting Manager population if reportingManager is provided
-            let reportingManagerId = null;
-            if (row.reportingManager) {
-              const manager = await Employee.findOne({ employeeId: row.reportingManager });
-              if (manager) reportingManagerId = manager._id;
-            }
+          let reportingManagerId = null;
+          if (row.reportingManager) {
+            const manager = await Employee.findOne({ employeeId: row.reportingManager });
+            if (manager) reportingManagerId = manager._id;
+          }
 
             // Compose employee data (leave missing fields blank)
-            const employeeData = {
-              employeeId: row.employeeId || '',
-              userId: row.userId || '',
-              name: row.name || '',
-              dateOfBirth: parseExcelDate(row.dateOfBirth),
-              fatherName: row.fatherName || '',
-              motherName: row.motherName || '',
-              mobileNumber: row.mobileNumber || '',
-              permanentAddress: row.permanentAddress || '',
-              currentAddress: row.currentAddress || '',
-              email: row.email || '',
-              password: row.password || Math.random().toString(36).slice(-8),
-              aadharNumber: row.aadharNumber || '',
-              bloodGroup: row.bloodGroup || '',
-              gender: row.gender || '',
-              maritalStatus: row.maritalStatus || '',
-              spouseName: row.spouseName || '',
-              emergencyContactName: row.emergencyContactName || '',
-              emergencyContactNumber: row.emergencyContactNumber || '',
-              dateOfJoining: parseExcelDate(row.dateOfJoining),
-              dateOfResigning: row.status === 'Resigned' ? parseExcelDate(row.dateOfResigning) : null,
-              employeeType: row.status === 'Working' ? row.employeeType : null,
-              probationPeriod: row.status === 'Working' && row.employeeType === 'Probation' ? row.probationPeriod : null,
-              confirmationDate: row.status === 'Working' && row.employeeType === 'Probation' ? parseExcelDate(row.confirmationDate) : null,
-              reportingManager: reportingManagerId,
-              status: row.status || '',
-              referredBy: row.referredBy || '',
-              loginType: row.loginType || '',
-              designation: row.designation || '',
-              location: row.location || '',
-              department: departmentId,
-              panNumber: row.panNumber || '',
-              pfNumber: row.pfNumber || '',
-              uanNumber: row.uanNumber || '',
-              esiNumber: row.esiNumber || '',
-              paymentType: row.paymentType || '',
-              bankDetails: row.paymentType === 'Bank Transfer' ? {
-                bankName: row.bankName || '',
-                bankBranch: row.bankBranch || '',
-                accountNumber: row.accountNumber || '',
-                ifscCode: row.ifscCode || '',
-              } : null,
+          const employeeData = {
+            employeeId: row.employeeId || '',
+            userId: row.userId || '',
+            name: row.name || '',
+            dateOfBirth: parseExcelDate(row.dateOfBirth),
+            fatherName: row.fatherName || '',
+            motherName: row.motherName || '',
+            mobileNumber: row.mobileNumber || '',
+            permanentAddress: row.permanentAddress || '',
+            currentAddress: row.currentAddress || '',
+            email: row.email || '',
+            password: row.password || Math.random().toString(36).slice(-8),
+            aadharNumber: row.aadharNumber || '',
+            bloodGroup: row.bloodGroup || '',
+            gender: row.gender || '',
+            maritalStatus: row.maritalStatus || '',
+            spouseName: row.spouseName || '',
+            emergencyContactName: row.emergencyContactName || '',
+            emergencyContactNumber: row.emergencyContactNumber || '',
+            dateOfJoining: parseExcelDate(row.dateOfJoining),
+            dateOfResigning: row.status === 'Resigned' ? parseExcelDate(row.dateOfResigning) : null,
+            employeeType: row.status === 'Working' ? row.employeeType : null,
+            probationPeriod: row.status === 'Working' && row.employeeType === 'Probation' ? row.probationPeriod : null,
+            confirmationDate: row.status === 'Working' && row.employeeType === 'Probation' ? parseExcelDate(row.confirmationDate) : null,
+            reportingManager: reportingManagerId,
+            status: row.status || '',
+            referredBy: row.referredBy || '',
+            loginType: row.loginType || '',
+            designation: row.designation || '',
+            location: row.location || '',
+            department: departmentId,
+            panNumber: row.panNumber || '',
+            pfNumber: row.pfNumber || '',
+            uanNumber: row.uanNumber || '',
+            esiNumber: row.esiNumber || '',
+            paymentType: row.paymentType || '',
+            bankDetails: row.paymentType === 'Bank Transfer' ? {
+              bankName: row.bankName || '',
+              bankBranch: row.bankBranch || '',
+              accountNumber: row.accountNumber || '',
+              ifscCode: row.ifscCode || '',
+            } : null,
               // Lock all sections except document upload (which stays locked)
-              locked: true,
-              basicInfoLocked: true,
-              positionLocked: true,
-              statutoryLocked: true,
-              documentsLocked: true,
-              paymentLocked: true,
-            };
+            locked: true,
+            basicInfoLocked: true,
+            positionLocked: true,
+            statutoryLocked: true,
+            documentsLocked: true,
+            paymentLocked: true,
+          };
 
             // Remove empty bankDetails if paymentType is not 'Bank Transfer'
-            if (employeeData.paymentType !== 'Bank Transfer') {
-              delete employeeData.bankDetails;
-            }
+          if (employeeData.paymentType !== 'Bank Transfer') {
+            delete employeeData.bankDetails;
+          }
 
             // Save Employee
-            const employee = new Employee(employeeData);
-            await employee.save();
-            return { employeeId: employee.employeeId, _id: employee._id };
-          } catch (err) {
-            return { error: err.message, row };
-          }
+          const employee = new Employee(employeeData);
+          await employee.save();
+          return { employeeId: employee.employeeId, _id: employee._id };
+        } catch (err) {
+          return { error: err.message, row };
+        }
         })
-      );
+    );
 
-      res.json({
+    res.json({
         success: results.filter(r => !r.error),
         errors: results.filter(r => r.error)
-      });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
-    }
+    });
+  } catch (err) {
+    console.error('Error processing Excel upload:', err.message);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
-);
+});
 
 // Toggle Emergency Leave Permission (HOD for subordinates, CEO for HODs)
 router.patch('/:id/emergency-leave-permission', auth, role(['Admin', 'HOD', 'CEO']), async (req, res) => {
@@ -858,7 +912,7 @@ router.patch('/:id/emergency-leave-permission', auth, role(['Admin', 'HOD', 'CEO
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    const user = await Employee.findById(req.user.id);//admin
+    const user = await Employee.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -888,7 +942,7 @@ router.patch('/:id/emergency-leave-permission', auth, role(['Admin', 'HOD', 'CEO
       await Audit.create({
         action: 'toggle_emergency_leave_permission',
         user: req.user.id || 'unknown',
-        details: `Toggled Emergency Leave permission for employee ${employee.employeeId} to ${employee.canApplyEmergencyLeave}`
+        details: `Toggled Emergency Leave permission for employee ${employee.employeeId} to ${employee.canApplyEmergencyLeave}`,
       });
     } catch (auditErr) {
       console.warn('Audit logging failed:', auditErr.message);

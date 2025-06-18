@@ -23,8 +23,6 @@ const leaveSchema = new mongoose.Schema({
     required: true
   },
 
-  // Removed category field (no longer needed)
-
   halfDay: {
     time: { type: String, enum: ['forenoon', 'afternoon'] },
     date: { type: Date }
@@ -36,7 +34,7 @@ const leaveSchema = new mongoose.Schema({
   },
 
   reason: { type: String, required: true },
-  chargeGivenTo: { type: String, required: true },
+  chargeGivenTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   emergencyContact: { type: String, required: true },
 
   // Additional fields for specific leave types

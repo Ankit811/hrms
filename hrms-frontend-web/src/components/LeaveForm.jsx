@@ -37,6 +37,7 @@ function LeaveForm() {
   const [compensatoryBalance, setCompensatoryBalance] = useState(0);
   const [compensatoryEntries, setCompensatoryEntries] = useState([]);
   const [canApplyEmergencyLeave, setCanApplyEmergencyLeave] = useState(false);
+  const [employees, setEmployees] = useState([]); // New state for employee dropdown
 
   useEffect(() => {
     const fetchEmployeeData = async () => {
@@ -50,7 +51,16 @@ function LeaveForm() {
         console.error('Error fetching employee data:', err);
       }
     };
+    const fetchDepartmentEmployees = async () => {
+      try {
+        const res = await api.get('/employees/department');
+        setEmployees(res.data);
+      } catch (err) {
+        console.error('Error fetching department employees:', err);
+      }
+    };
     fetchEmployeeData();
+    fetchDepartmentEmployees();
   }, []);
 
   const handleChange = e => {
@@ -87,6 +97,10 @@ function LeaveForm() {
 
   const handleCompensatoryEntryChange = (value) => {
     setForm(prev => ({ ...prev, compensatoryEntryId: value }));
+  };
+
+  const handleChargeGivenToChange = (value) => {
+    setForm(prev => ({ ...prev, chargeGivenTo: value }));
   };
 
   const calculateLeaveDays = () => {
@@ -323,6 +337,9 @@ function LeaveForm() {
       setCompensatoryBalance(res.data.compensatoryLeaves || 0);
       setCompensatoryEntries(res.data.compensatoryAvailable || []);
       setCanApplyEmergencyLeave(res.data.canApplyEmergencyLeave || false);
+      // Refresh employee list after submission
+      const employeeRes = await api.get('/employees/department');
+      setEmployees(employeeRes.data);
     } catch (err) {
       console.error('Leave submit error:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || 'An error occurred while submitting the leave';
@@ -547,14 +564,22 @@ function LeaveForm() {
 
             <div>
               <Label htmlFor="chargeGivenTo">Charge Given To</Label>
-              <Input
-                id="chargeGivenTo"
-                name="chargeGivenTo"
-                type="text"
+              <Select
+                onValueChange={handleChargeGivenToChange}
                 value={form.chargeGivenTo}
-                onChange={handleChange}
-                placeholder="Enter charge given to"
-              />
+                disabled={employees.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={employees.length === 0 ? "No available employees" : "Select employee"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(employee => (
+                    <SelectItem key={employee._id} value={employee._id}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>

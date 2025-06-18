@@ -117,6 +117,38 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
       medicalCertificateId = fileData._id;
     }
 
+    // Validate chargeGivenTo
+    const chargeGivenToEmployee = await Employee.findById(req.body.chargeGivenTo);
+    if (!chargeGivenToEmployee) {
+      return res.status(400).json({ message: 'Selected employee for Charge Given To not found' });
+    }
+    // Check for overlapping charge assignments
+    const overlappingLeaves = await Leave.find({
+      chargeGivenTo: req.body.chargeGivenTo,
+      $or: [
+        {
+          'fullDay.from': { $lte: leaveEnd },
+          'fullDay.to': { $gte: leaveStart },
+          $and: [
+            { 'status.hod': { $ne: 'Rejected' } },
+            { 'status.ceo': { $ne: 'Rejected' } },
+            { 'status.admin': { $in: ['Pending', 'Acknowledged'] } }
+          ]
+        },
+        {
+          'halfDay.date': { $gte: leaveStart, $lte: leaveEnd },
+          $and: [
+            { 'status.hod': { $ne: 'Rejected' } },
+            { 'status.ceo': { $ne: 'Rejected' } },
+            { 'status.admin': { $in: ['Pending', 'Acknowledged'] } }
+          ]
+        }
+      ]
+    });
+    if (overlappingLeaves.length > 0) {
+      return res.status(400).json({ message: 'Selected employee is already assigned as Charge Given To for the specified date range' });
+    }
+
     switch (leaveType) {
       case 'Casual':
         const canTakeCasualLeave = await user.checkConsecutivePaidLeaves(leaveStart, leaveEnd);
@@ -148,7 +180,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
         if (!isConfirmed || user.gender !== 'Female') return res.status(400).json({ message: 'Maternity leave is only for confirmed female employees.' });
         if (yearsOfService < 1) return res.status(400).json({ message: 'Must have completed one year of service.' });
         if (leaveDays !== 90) return res.status(400).json({ message: 'Maternity leave must be 90 days.' });
-        if (user.maternityClaims >= 2) return res.status(400).json({ message: 'Maternity leave can only be availed Heavy twice during service.' });
+        if (user.maternityClaims >= 2) return res.status(400).json({ message: 'Maternity leave can only be availed twice during service.' });
         break;
       case 'Paternity':
         if (!isConfirmed || user.gender !== 'Male') return res.status(400).json({ message: 'Paternity leave is only for confirmed male employees.' });
@@ -247,6 +279,20 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
     });
 
     await leave.save();
+
+    // Notify the chargeGivenTo employee
+    const dateRangeStr = req.body.halfDay?.date
+      ? `on ${req.body.halfDay.date} (${req.body.halfDay.session})`
+      : `from ${req.body.fullDay.from} to ${req.body.fullDay.to}`;
+    await Notification.create({
+      userId: chargeGivenToEmployee.employeeId,
+      message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}`
+    });
+    if (global._io) {
+      global._io.to(chargeGivenToEmployee.employeeId).emit('notification', {
+        message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}`
+      });
+    }
 
     if (req.user.role === 'HOD' || req.user.role === 'Admin') {
       const ceo = await Employee.findOne({ loginType: 'CEO' });
@@ -354,6 +400,7 @@ router.get('/', auth, async (req, res) => {
     const total = await Leave.countDocuments(query);
     const leaves = await Leave.find(query)
       .populate('department', 'name')
+      .populate('chargeGivenTo', 'name') // Populate chargeGivenTo
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -390,7 +437,7 @@ router.get('/', auth, async (req, res) => {
 // Approve Leave
 router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res) => {
   try {
-    const leave = await Leave.findById(req.params.id).populate('employee');
+    const leave = await Leave.findById(req.params.id).populate('employee').populate('chargeGivenTo');
     if (!leave) {
       return res.status(404).json({ message: 'Leave request not found' });
     }
@@ -524,18 +571,37 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
     }
 
     if (status === 'Rejected') {
+      // Notify the employee who submitted the leave
       await Notification.create({
         userId: leave.employee.employeeId,
         message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}`,
       });
-      if (global._io) global._io.to(leave.employee.employeeId).emit('notification', { message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}` });
+      if (global._io) {
+        global._io.to(leave.employee.employeeId).emit('notification', {message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}`});
+      }
+
+      // Notify the chargeGivenTo employee that they are no longer assigned
+      if (leave.chargeGivenTo) {
+        const dateRangeStr = leave.halfDay?.date
+          ? `on ${leave.halfDay.date} (${leave.halfDay.session})`
+          : `from ${leave.fullDay.from} to ${leave.fullDay.to}`;
+        await Notification.create({
+          userId: leave.chargeGivenTo.employeeId,
+          message: `You are no longer assigned as Charge Given To for ${leave.name}'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}`,
+        });
+        if (global._io) {
+          global._io.to(leave.chargeGivenTo.employeeId).emit('notification', {
+            message: `You are no longer assigned as Charge Given To for ${leave.name}'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}`
+          });
+        }
+      }
     }
 
     await leave.save();
     await Audit.create({ user: user.employeeId, action: `${status} Leave`, details: `${status} leave request for ${leave.name}` });
 
     const employee = await Employee.findById(leave.employee);
-    if (employee) {
+    if (employee && status !== 'Rejected') {
       await Notification.create({ userId: employee.employeeId, message: `Your leave request has been ${status.toLowerCase()} by ${currentStage.toUpperCase()}` });
       if (global._io) global._io.to(employee.employeeId).emit('notification', { message: `Your leave request has been ${status.toLowerCase()} by ${currentStage.toUpperCase()}` });
     }
