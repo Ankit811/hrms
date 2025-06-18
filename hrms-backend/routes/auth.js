@@ -76,7 +76,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = await Employee.findById(req.user.id)
-      .select('_id loginType name email employeeId department designation employeeType')
+      .select('_id loginType name email employeeId gender department designation employeeType')
       .populate('department');
     if (!user) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -87,6 +87,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       name: user.name,
       email: user.email,
       employeeId: user.employeeId,
+      gender: user.gender,
       department: user.department ? { _id: user.department._id, name: user.department.name } : null,
       designation: user.designation,
       employeeType: user.employeeType,

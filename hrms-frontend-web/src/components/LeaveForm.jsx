@@ -42,6 +42,7 @@ function LeaveForm() {
     const fetchEmployeeData = async () => {
       try {
         const res = await api.get('/dashboard/employee-info');
+        console.log('Employee Info Response:', res.data); // For debugging
         setCompensatoryBalance(res.data.compensatoryLeaves || 0);
         setCompensatoryEntries(res.data.compensatoryAvailable || []);
         setCanApplyEmergencyLeave(res.data.canApplyEmergencyLeave || false);
@@ -103,6 +104,7 @@ function LeaveForm() {
   };
 
   const validateForm = () => {
+    console.log('User Context:', user); // Debug user object
     if (!form.leaveType) return 'Leave Type is required';
     if (!form.reason) return 'Reason is required';
     if (!form.chargeGivenTo) return 'Charge Given To is required';
@@ -129,7 +131,7 @@ function LeaveForm() {
     const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
     const istTime = new Date(today.getTime() + istOffset);
     istTime.setUTCHours(0, 0, 0, 0); // Midnight IST
-
+    
     const sevenDaysAgo = new Date(istTime);
     sevenDaysAgo.setDate(istTime.getDate() - 7);
 
@@ -224,10 +226,10 @@ function LeaveForm() {
     if (form.leaveType === 'Medical' && form.duration === 'half') {
       return 'Medical leave cannot be applied as a half-day leave';
     }
-    if (form.leaveType === 'Maternity' && user?.gender !== 'Female') {
+    if (form.leaveType === 'Maternity' && (!user || user.gender?.trim().toLowerCase() !== 'female')) {
       return 'Maternity leave is only available for female employees';
     }
-    if (form.leaveType === 'Maternity' && user?.employeeType !== 'Confirmed') {
+    if (form.leaveType === 'Maternity' && (!user || user.employeeType !== 'Confirmed')) {
       return 'Maternity leave is only available for Confirmed employees';
     }
     if (form.leaveType === 'Maternity' && form.duration === 'full') {
@@ -241,10 +243,12 @@ function LeaveForm() {
     if (form.leaveType === 'Maternity' && form.duration === 'half') {
       return 'Maternity leave cannot be applied as a half-day leave';
     }
-    if (form.leaveType === 'Paternity' && user?.gender !== 'Male') {
+    if (form.leaveType === 'Paternity' && (!user || user.gender?.trim().toLowerCase() !== 'male')) {
+      console.log('Paternity Gender Validation:', { gender: user?.gender }); // Debug gender
       return 'Paternity leave is only available for male employees';
     }
-    if (form.leaveType === 'Paternity' && user?.employeeType !== 'Confirmed') {
+    if (form.leaveType === 'Paternity' && (!user || user.employeeType !== 'Confirmed')) {
+      console.log('Paternity Employee Type Validation:', { employeeType: user?.employeeType }); // Debug employeeType
       return 'Paternity leave is only available for Confirmed employees';
     }
     if (form.leaveType === 'Paternity' && form.duration === 'full') {

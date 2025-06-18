@@ -162,7 +162,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
   try {
     const { employeeId } = req.user;
     const employee = await Employee.findOne({ employeeId })
-      .select('employeeType paidLeaves restrictedHolidays compensatoryLeaves department designation canApplyEmergencyLeave')
+      .select('employeeType paidLeaves gender restrictedHolidays compensatoryLeaves department designation canApplyEmergencyLeave')
       .populate('department', 'name');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -177,6 +177,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
     res.json({
       employeeType: employee.employeeType,
       paidLeaves: employee.paidLeaves,
+      gender: employee.gender,
       restrictedHolidays: employee.restrictedHolidays,
       compensatoryLeaves: employee.compensatoryLeaves,
       department: employee.department,
