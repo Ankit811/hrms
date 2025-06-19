@@ -53,7 +53,7 @@ function Attendance() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [total, setTotal] = useState(0);
-  const [absenceAlerts, setAbsenceAlerts] = useState({}); // New state for absence alerts
+  const [absenceAlerts, setAbsenceAlerts] = useState({});
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -127,7 +127,7 @@ function Attendance() {
         setError(
           filterParams.employeeId
             ? "No attendance records found for the specified Employee ID."
-            : "No attendance records found for the selected filters."
+            : "No attendance records found for the selected date or filters."
         );
       }
     } catch (err) {
@@ -370,7 +370,7 @@ function Attendance() {
                   <TableBody>
                     {paginatedAttendance.map((a) => (
                       <TableRow
-                        key={a._id} // Use _id for unique key
+                        key={a._id}
                         className="hover:bg-gray-50"
                       >
                         <TableCell>{a.employeeId}</TableCell>

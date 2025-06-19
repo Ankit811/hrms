@@ -101,6 +101,7 @@ const employeeSchema = new mongoose.Schema({
   lastMedicalReset: { type: Date }, // For Medical leaves
   lastRestrictedHolidayReset: { type: Date }, // For Restricted Holiday
   canApplyEmergencyLeave: { type: Boolean, default: false }, // Added field for Emergency Leave permission
+  lastPunchMissedSubmission: { type: Date }, // Tracks last Punch Missed Form submission
   attendanceHistory: [{ // New field for attendance history
     date: { type: Date, required: true },
     status: { type: String, enum: ['Present', 'Absent', 'On Leave'], required: true },

@@ -9,6 +9,8 @@ import MyDashboard from '../components/EmployeeDashboard';
 import LeaveList from '../components/LeaveList';
 import Attendance from '../components/Attendance';
 import ApproveOT from '../components/OTApproval';
+import PunchMissedForm from '../components/PunchMissedForm';
+import PunchMissedList from '../components/PunchMissedList';
 
 function Employee() {
   return (
@@ -24,6 +26,8 @@ function Employee() {
           <Route path="leave-list" element={<LeaveList />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="approve-ot" element={<ApproveOT />} />
+          <Route path="punch-missed" element={<PunchMissedForm />} />
+          <Route path="punch-missed-list" element={<PunchMissedList />} />
         </Routes>
       </div>
     </div>

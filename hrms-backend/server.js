@@ -60,6 +60,7 @@ const leaveRoutes = require('./routes/leaves');
 const notificationRoutes = require('./routes/notifications');
 const otRouter = require('./routes/ot');
 const odRouter = require('./routes/od');
+const punchMissedRouter = require('./routes/punchMissed');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -70,6 +71,7 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ot', otRouter);
 app.use('/api/od', odRouter);
+app.use('/api/punch-missed', punchMissedRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
@@ -95,21 +97,21 @@ mongoose.connect(process.env.MONGO_URI)
         }, { timezone: 'Asia/Kolkata' });
 
         // Schedule processLateArrivalsAndAbsents at 9:35 AM daily
-        cron.schedule('35 9 * * *', async () => {
+        cron.schedule('32 9 * * *', async () => {
           console.log('Running processLateArrivalsAndAbsents at 9:35 AM...');
           await processLateArrivalsAndAbsents();
           console.log('processLateArrivalsAndAbsents at 9:35 AM completed.');
         }, { timezone: 'Asia/Kolkata' });
 
         // Schedule processUnclaimedOT at 12:30 AM daily
-        cron.schedule('30 9 * * *', async () => {
+        cron.schedule('35 9 * * *', async () => {
           console.log('Running processUnclaimedOT at 9:30 AM... for the timing at 9:30 AM');
           await processUnclaimedOT();
           console.log('processUnclaimedOT at 9:30 AM completed.');
         }, { timezone: 'Asia/Kolkata' });
 
         // Schedule checkAbsences at midnight daily
-        cron.schedule('0 0 * * *', async () => {
+        cron.schedule('36 9 * * *', async () => {
           console.log('Running checkAbsences at midnight...');
           await checkAbsences();
           console.log('checkAbsences at midnight completed.');

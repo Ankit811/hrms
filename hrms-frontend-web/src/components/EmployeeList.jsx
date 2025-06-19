@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
+import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import ContentLayout from './ContentLayout';
 import EmployeeDetails from './EmployeeDetails';
@@ -13,16 +16,23 @@ import Pagination from './Pagination';
 
 function EmployeeList() {
   console.log('EmployeeList component rendered');
+  const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const initialFilters = useMemo(
+    () => ({
+      departmentId: user?.loginType === 'HOD' && user?.department ? user.department._id : 'all',
+    }),
+    [user]
+  );
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState(initialFilters.departmentId);
   const [departments, setDepartments] = useState([]);
   const [selectedEmployeeForDetails, setSelectedEmployeeForDetails] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [loginType, setRole] = useState('');
+  const [loginType, setLoginType] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -43,12 +53,13 @@ function EmployeeList() {
           throw new Error('Failed to fetch user details.');
         });
         const userLoginType = userRes.data.loginType || '';
-        setRole(userLoginType);
+        setLoginType(userLoginType);
         console.log('User fetched:', userRes.data);
 
         // Fetch employees based on role
         const endpoint = userLoginType === 'HOD' ? '/employees/department' : '/employees';
-        const empRes = await api.get(endpoint).catch(err => {
+        const params = userLoginType === 'HOD' ? {} : { departmentId: departmentFilter === 'all' ? undefined : departmentFilter };
+        const empRes = await api.get(endpoint, { params }).catch(err => {
           console.error('Error fetching employees:', err.response?.data || err.message);
           if (err.response?.status === 401 || err.response?.status === 403) {
             localStorage.removeItem('token');
@@ -83,6 +94,8 @@ function EmployeeList() {
               setError('Failed to fetch departments. Department filter may be unavailable.');
             }
           }
+        } else if (userLoginType === 'HOD' && user?.department) {
+          setDepartments([{ _id: user.department._id, name: user.department.name }]);
         }
 
       } catch (err) {
@@ -95,7 +108,7 @@ function EmployeeList() {
       }
     };
     fetchData();
-  }, [navigate]);
+  }, [navigate, departmentFilter, user]);
 
   const filteredEmployees = useMemo(() => {
     let filtered = employees;
@@ -177,6 +190,16 @@ function EmployeeList() {
     setSelectedEmployeeForDetails(updatedEmployee);
   };
 
+  const handleFilter = () => {
+    setCurrentPage(1);
+    // Trigger re-fetch by updating dependency in useEffect
+  };
+
+  const hodDepartmentName =
+    loginType === 'HOD' && user?.department
+      ? departments.find((dep) => dep._id === user.department._id)?.name || 'Unknown'
+      : '';
+
   console.log('Rendering EmployeeList, loading:', loading, 'error:', error, 'employees:', employees.length);
 
   if (loading) {
@@ -207,37 +230,65 @@ function EmployeeList() {
     return (
       <ContentLayout title="Employee List">
         <div className="w-full max-w-6xl mx-auto">
-          {/* <p className="text-green-500">EmployeeList content is rendering</p> */}
           {error && (
             <p className="text-yellow-500 mb-4">{error}</p>
           )}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            <Input
-              placeholder="Search by name or ID"
-              value={search}
-              onChange={(e) => {
-                console.log('Search input changed:', e.target.value);
-                setSearch(e.target.value);
-              }}
-              className="max-w-sm"
-            />
-            {loginType !== 'HOD' && (
-              <Select value={departmentFilter} onValueChange={(value) => {
-                console.log('Department filter changed:', value);
-                setDepartmentFilter(value);
-              }}>
-                <SelectTrigger className="max-w-sm">
-                  <SelectValue placeholder="Filter by department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map(dept => (
-                    dept._id && <SelectItem key={dept._id} value={dept._id}>{dept.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+          >
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="search">Search</Label>
+              <Input
+                id="search"
+                placeholder="Search by name or ID"
+                value={search}
+                onChange={(e) => {
+                  console.log('Search input changed:', e.target.value);
+                  setSearch(e.target.value);
+                }}
+                className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="departmentId">Department</Label>
+              {loginType === 'HOD' ? (
+                <Input
+                  id="departmentId"
+                  value={hodDepartmentName}
+                  readOnly
+                  className="mt-1 border-gray-300 bg-gray-100 cursor-not-allowed"
+                  placeholder="Your Department"
+                />
+              ) : (
+                <Select
+                  onValueChange={(value) => {
+                    setDepartmentFilter(value);
+                    handleFilter();
+                  }}
+                  value={departmentFilter}
+                  disabled={loading}
+                >
+                  <SelectTrigger
+                    id="departmentId"
+                    className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map((dep) => (
+                      <SelectItem key={dep._id} value={dep._id}>
+                        {dep.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </motion.div>
           {filteredEmployees.length === 0 ? (
             <div className="text-center py-8 bg-gray-100 rounded-lg">
               <p className="text-lg font-semibold text-gray-700">No employees found.</p>
