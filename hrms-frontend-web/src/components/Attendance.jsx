@@ -66,12 +66,14 @@ function Attendance() {
   }, []);
 
   const formatDateDisplay = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-GB", {
+    const dateUTC = new Date(dateStr);
+    // Convert UTC to IST by adding 5.5 hours (5.5 * 60 * 60 * 1000 ms)
+    const dateIST = new Date(dateUTC.getTime() + (5.5 * 60 * 60 * 1000));
+    return dateIST.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
-    }); // Returns e.g., 04/06/2025
+    }); // Returns e.g., 18/06/2025
   };
 
   const fetchAttendance = useCallback(async (filterParams) => {

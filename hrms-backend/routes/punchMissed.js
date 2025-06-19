@@ -14,6 +14,7 @@ router.get('/check-limit', auth, role(['Employee', 'HOD', 'Admin']), async (req,
       return res.status(404).json({ message: 'Employee not found' });
     }
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to IST midnight
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     const lastSubmission = employee.lastPunchMissedSubmission
@@ -38,6 +39,7 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       return res.status(404).json({ message: 'Employee not found' });
     }
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to IST midnight
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     const lastSubmission = employee.lastPunchMissedSubmission
@@ -50,7 +52,11 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     ) {
       return res.status(400).json({ message: 'Submission limit reached for this month' });
     }
-    if (new Date(punchMissedDate) > today) {
+    const punchMissedDateIST = new Date(punchMissedDate);
+    if (isNaN(punchMissedDateIST)) {
+      return res.status(400).json({ message: 'Invalid punchMissedDate format' });
+    }
+    if (punchMissedDateIST > today) {
       return res.status(400).json({ message: 'Punch Missed Date cannot be in the future' });
     }
     if (!/^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$/i.test(yourInput)) {
@@ -255,9 +261,10 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
       punchMissed.status.ceo = 'Approved';
       await punchMissed.save();
 
-      // Normalize punchMissedDate to UTC midnight
-      const logDateUTC = new Date(punchMissed.punchMissedDate);
-      logDateUTC.setUTCHours(0, 0, 0, 0);
+      // Normalize punchMissedDate to UTC midnight, accounting for IST
+      const punchMissedDateIST = new Date(punchMissed.punchMissedDate);
+      const logDateUTC = new Date(punchMissedDateIST.getTime() - (5.5 * 60 * 60 * 1000));
+      logDateUTC.setUTCHours(18, 30, 0, 0);
 
       // Check for existing attendance record
       const existingAttendance = await Attendance.findOne({
