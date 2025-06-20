@@ -212,7 +212,7 @@ router.get('/department', auth, role(['HOD', 'Employee']), async (req, res) => {
     }
 
     const employees = await Employee.find(query)
-      .select('_id name employeeId')
+      .select('_id name employeeId gender department')
       .populate('department', 'name');
     console.log('Fetching department employees for:', loginType, user.department._id);
     console.log('Employees found:', employees.length);
