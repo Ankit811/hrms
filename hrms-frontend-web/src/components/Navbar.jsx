@@ -33,6 +33,8 @@ function Navbar() {
           },
         ],
       },
+      { text: "Payroll Download", path: "/admin/payroll-download" },
+      { text: "Generate Letters", path: "/admin/generate-letters" },
     ],
     CEO: [
       { text: "Dashboard", path: "/ceo/dashboard" },

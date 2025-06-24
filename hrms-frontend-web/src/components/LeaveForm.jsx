@@ -22,15 +22,13 @@ function LeaveForm() {
   const { user } = useContext(AuthContext);
   const [form, setForm] = useState({
     leaveType: '',
-    fullDay: { from: '', to: '' },
-    halfDay: { date: '', session: 'forenoon' },
+    dates: { from: '', to: '', fromDuration: 'full', fromSession: 'forenoon', toDuration: 'full', toSession: 'forenoon' },
     reason: '',
     chargeGivenTo: '',
     emergencyContact: '',
     compensatoryEntryId: '',
     restrictedHoliday: '',
     projectDetails: '',
-    duration: '',
     medicalCertificate: null,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -56,12 +54,13 @@ function LeaveForm() {
     const fetchDepartmentEmployees = async () => {
       try {
         const params = {};
-        if (form.duration === 'full' && form.fullDay.from && form.fullDay.to) {
-          params.startDate = form.fullDay.from;
-          params.endDate = form.fullDay.to;
-        } else if (form.duration === 'half' && form.halfDay.date) {
-          params.startDate = form.halfDay.date;
-          params.endDate = form.halfDay.date;
+        if (form.dates.from) {
+          params.startDate = form.dates.from;
+          params.endDate = form.dates.to || form.dates.from;
+          params.fromDuration = form.dates.fromDuration;
+          params.fromSession = form.dates.fromDuration === 'half' ? form.dates.fromSession : undefined;
+          params.toDuration = form.dates.to ? form.dates.toDuration : undefined;
+          params.toSession = form.dates.to && form.dates.toDuration === 'half' ? form.dates.toSession : undefined;
         }
         const res = await api.get('/employees/department', { params });
         setEmployees(res.data);
@@ -72,21 +71,15 @@ function LeaveForm() {
 
     fetchEmployeeData();
     fetchDepartmentEmployees();
-  }, [form.duration, form.fullDay.from, form.fullDay.to, form.halfDay.date]);
+  }, [form.dates.from, form.dates.to, form.dates.fromDuration, form.dates.fromSession, form.dates.toDuration, form.dates.toSession]);
 
   const handleChange = e => {
     const { name, value } = e.target;
-    if (name.includes('fullDay')) {
+    if (name.includes('dates')) {
+      const field = name.split('.')[1];
       setForm(prev => ({
         ...prev,
-        fullDay: { ...prev.fullDay, [name.split('.')[1]]: value },
-        halfDay: prev.duration === 'full' ? { date: '', session: 'forenoon' } : prev.halfDay,
-      }));
-    } else if (name.includes('halfDay')) {
-      setForm(prev => ({
-        ...prev,
-        halfDay: { ...prev.halfDay, [name.split('.')[1]]: value },
-        fullDay: prev.duration === 'half' ? { from: '', to: '' } : prev.fullDay,
+        dates: { ...prev.dates, [field]: value },
       }));
     } else if (name === 'medicalCertificate') {
       const file = e.target.files[0];
@@ -115,15 +108,25 @@ function LeaveForm() {
   };
 
   const calculateLeaveDays = () => {
-    if (form.duration === 'half' && form.halfDay.date) {
+    if (form.dates.fromDuration === 'half' && form.dates.fromSession === 'forenoon') {
       return 0.5;
     }
-    if (form.duration === 'full' && form.fullDay.from && form.fullDay.to) {
-      const from = new Date(form.fullDay.from);
-      const to = new Date(form.fullDay.to);
-      if (to >= from) {
-        return ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+    if (form.dates.from && form.dates.to) {
+      const from = new Date(form.dates.from);
+      const to = new Date(form.dates.to);
+      if (to < from) return 0;
+      if (from.toISOString().split('T')[0] === to.toISOString().split('T')[0]) {
+        if (form.dates.fromDuration === 'full' && form.dates.toDuration === 'full') {
+          return 1;
+        } else if (form.dates.fromDuration === 'half' && form.dates.toDuration === 'half' && form.dates.fromSession === 'afternoon' && form.dates.toSession === 'forenoon') {
+          return 0.5;
+        }
+        return 0;
       }
+      let days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      if (form.dates.fromDuration === 'half') days -= 0.5;
+      if (form.dates.toDuration === 'half') days -= 0.5;
+      return days;
     }
     return 0;
   };
@@ -134,22 +137,14 @@ function LeaveForm() {
     if (!form.reason) return 'Reason is required';
     if (!form.chargeGivenTo) return 'Charge Given To is required';
     if (!form.emergencyContact) return 'Emergency Contact is required';
-    if (!form.duration) return 'Leave Duration is required';
-    if (form.duration === 'half' && (!form.halfDay.date || !form.halfDay.session)) {
-      return 'Half Day Date and Session are required';
-    }
-    if (form.duration === 'half' && (form.fullDay.from || form.fullDay.to)) {
-      return 'Full Day dates must be empty for Half Day leave';
-    }
-    if (form.duration === 'full' && (!form.fullDay.from || !form.fullDay.to)) {
-      return 'Full Day From and To dates are required';
-    }
-    if (form.duration === 'full' && (form.halfDay.date || form.halfDay.session !== 'forenoon')) {
-      return 'Half Day fields must be empty for Full Day leave';
-    }
-    if (form.fullDay.from && form.fullDay.to && new Date(form.fullDay.to) < new Date(form.fullDay.from)) {
-      return 'To Date cannot be earlier than From Date';
-    }
+    if (!form.dates.from) return 'From Date is required';
+    if (form.dates.fromDuration === 'full' && !form.dates.to) return 'To Date is required for Full Day leave';
+    if (form.dates.fromDuration === 'half' && form.dates.fromSession === 'afternoon' && !form.dates.to) return 'To Date is required for Afternoon Half Day leave';
+    if (form.dates.to && new Date(form.dates.to) < new Date(form.dates.from)) return 'To Date cannot be earlier than From Date';
+    if (!['full', 'half'].includes(form.dates.fromDuration)) return 'From Duration must be "full" or "half"';
+    if (form.dates.fromDuration === 'half' && !['forenoon', 'afternoon'].includes(form.dates.fromSession)) return 'From Session must be "forenoon" or "afternoon"';
+    if (form.dates.to && !['full', 'half'].includes(form.dates.toDuration)) return 'To Duration must be "full" or "half"';
+    if (form.dates.to && form.dates.toDuration === 'half' && form.dates.toSession !== 'forenoon') return 'To Session must be "forenoon" for Half Day To Duration';
 
     // Compute today in IST
     const today = new Date();
@@ -160,54 +155,21 @@ function LeaveForm() {
     const sevenDaysAgo = new Date(istTime);
     sevenDaysAgo.setDate(istTime.getDate() - 7);
 
-    if (form.duration === 'half' && form.halfDay.date && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
-      const halfDayDate = new Date(form.halfDay.date);
-      if (halfDayDate < istTime) {
-        return 'Half Day date cannot be in the past for this leave type';
-      }
+    if (form.dates.from && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
+      const fromDate = new Date(form.dates.from);
+      if (fromDate <= istTime) return 'From Date must be after today for this leave type';
     }
-    if (form.duration === 'full' && form.fullDay.from && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
-      const fromDate = new Date(form.fullDay.from);
-      if (fromDate <= istTime) {
-        return 'From Date must be after today for this leave type';
-      }
-    }
-    if (form.leaveType === 'Medical' && form.duration === 'full' && form.fullDay.from) {
-      const fromDate = new Date(form.fullDay.from);
-      if (fromDate < sevenDaysAgo || fromDate > istTime) {
-        return 'Medical leave From Date must be within today and 7 days prior';
-      }
+    if (form.leaveType === 'Medical' && form.dates.from) {
+      const fromDate = new Date(form.dates.from);
+      if (fromDate < sevenDaysAgo || fromDate > istTime) return 'Medical leave From Date must be within today and 7 days prior';
     }
     if (form.leaveType === 'Emergency') {
-      if (!canApplyEmergencyLeave) {
-        return 'You are not authorized to apply for Emergency Leave';
-      }
+      if (!canApplyEmergencyLeave) return 'You are not authorized to apply for Emergency Leave';
       const leaveDays = calculateLeaveDays();
-      if (leaveDays > 1) {
-        return 'Emergency leave must be half day or one full day';
-      }
+      if (leaveDays > 1) return 'Emergency leave must be half day or one full day';
       const todayStr = istTime.toISOString().split('T')[0];
-      if (form.duration === 'half' && form.halfDay.date) {
-        const halfDayDateStr = form.halfDay.date;
-        console.log('Emergency Validation (Frontend):', {
-          todayStr,
-          halfDayDateStr
-        });
-        if (halfDayDateStr !== todayStr) {
-          return 'Emergency leave must be for the current date only';
-        }
-      }
-      if (form.duration === 'full' && form.fullDay.from && form.fullDay.to) {
-        const fromDateStr = form.fullDay.from;
-        const toDateStr = form.fullDay.to;
-        console.log('Emergency Validation (Frontend):', {
-          todayStr,
-          fromDateStr,
-          toDateStr
-        });
-        if (fromDateStr !== todayStr || toDateStr !== todayStr) {
-          return 'Emergency leave must be for the current date only';
-        }
+      if (form.dates.from !== todayStr || (form.dates.to && form.dates.to !== todayStr)) {
+        return 'Emergency leave must be for the current date only';
       }
     }
     if (form.leaveType === 'Compensatory') {
@@ -220,54 +182,37 @@ function LeaveForm() {
         return `Selected entry (${entry.hours} hours) does not match leave duration (${leaveDays === 0.5 ? 'Half Day (4 hours)' : 'Full Day (8 hours)'})`;
       }
     }
-    if (form.leaveType === 'Restricted Holidays' && !form.restrictedHoliday) {
-      return 'Please select a restricted holiday';
-    }
-    if (form.leaveType === 'Casual' && user?.employeeType === 'Confirmed' && form.duration === 'full') {
-      const from = new Date(form.fullDay.from);
-      const to = new Date(form.fullDay.to);
-      const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-      if (days > 3) {
-        return 'Confirmed employees can only take up to 3 consecutive Casual leaves.';
-      }
+    if (form.leaveType === 'Restricted Holidays' && !form.restrictedHoliday) return 'Please select a restricted holiday';
+    if (form.leaveType === 'Casual' && user?.employeeType === 'Confirmed' && form.dates.fromDuration === 'full') {
+      const from = new Date(form.dates.from);
+      const to = new Date(form.dates.to);
+      let days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      if (form.dates.toDuration === 'half') days -= 0.5;
+      if (days > 3) return 'Confirmed employees can only take up to 3 consecutive Casual leaves.';
     }
     if (form.leaveType === 'Medical') {
       console.log('Validating Medical leave, user:', user, 'employeeType:', user?.employeeType);
-      if (!user || user.employeeType !== 'Confirmed') {
-        return 'Medical leave is only available for Confirmed employees';
-      }
+      if (!user || user.employeeType !== 'Confirmed') return 'Medical leave is only available for Confirmed employees';
     }
-    if (form.leaveType === 'Medical' && form.duration === 'full') {
-      const from = new Date(form.fullDay.from);
-      const to = new Date(form.fullDay.to);
-      const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-      if (days !== 3 && days !== 4) {
-        return 'Medical leave must be exactly 3 or 4 days';
-      }
-      if (!form.medicalCertificate) {
-        return 'Medical certificate is required for Medical leave';
-      }
+    if (form.leaveType === 'Medical' && form.dates.fromDuration === 'full') {
+      const from = new Date(form.dates.from);
+      const to = new Date(form.dates.to);
+      let days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      if (form.dates.toDuration === 'half') days -= 0.5;
+      if (days !== 3 && days !== 4) return 'Medical leave must be exactly 3 or 4 days';
+      if (!form.medicalCertificate) return 'Medical certificate is required for Medical leave';
     }
-    if (form.leaveType === 'Medical' && form.duration === 'half') {
-      return 'Medical leave cannot be applied as a half-day leave';
+    if (form.leaveType === 'Medical' && form.dates.fromDuration === 'half') return 'Medical leave cannot be applied as a half-day leave';
+    if (form.leaveType === 'Maternity' && (!user || user.gender?.trim().toLowerCase() !== 'female')) return 'Maternity leave is only available for female employees';
+    if (form.leaveType === 'Maternity' && (!user || user.employeeType !== 'Confirmed')) return 'Maternity leave is only available for Confirmed employees';
+    if (form.leaveType === 'Maternity' && form.dates.fromDuration === 'full') {
+      const from = new Date(form.dates.from);
+      const to = new Date(form.dates.to);
+      let days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      if (form.dates.toDuration === 'half') days -= 0.5;
+      if (days !== 90) return 'Maternity leave must be exactly 90 days';
     }
-    if (form.leaveType === 'Maternity' && (!user || user.gender?.trim().toLowerCase() !== 'female')) {
-      return 'Maternity leave is only available for female employees';
-    }
-    if (form.leaveType === 'Maternity' && (!user || user.employeeType !== 'Confirmed')) {
-      return 'Maternity leave is only available for Confirmed employees';
-    }
-    if (form.leaveType === 'Maternity' && form.duration === 'full') {
-      const from = new Date(form.fullDay.from);
-      const to = new Date(form.fullDay.to);
-      const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-      if (days !== 90) {
-        return 'Maternity leave must be exactly 90 days';
-      }
-    }
-    if (form.leaveType === 'Maternity' && form.duration === 'half') {
-      return 'Maternity leave cannot be applied as a half-day leave';
-    }
+    if (form.leaveType === 'Maternity' && form.dates.fromDuration === 'half') return 'Maternity leave cannot be applied as a half-day leave';
     if (form.leaveType === 'Paternity' && (!user || user.gender?.trim().toLowerCase() !== 'male')) {
       console.log('Paternity Gender Validation:', { gender: user?.gender });
       return 'Paternity leave is only available for male employees';
@@ -276,17 +221,14 @@ function LeaveForm() {
       console.log('Paternity Employee Type Validation:', { employeeType: user?.employeeType });
       return 'Paternity leave is only available for Confirmed employees';
     }
-    if (form.leaveType === 'Paternity' && form.duration === 'full') {
-      const from = new Date(form.fullDay.from);
-      const to = new Date(form.fullDay.to);
-      const days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
-      if (days !== 7) {
-        return 'Paternity leave must be exactly 7 days';
-      }
+    if (form.leaveType === 'Paternity' && form.dates.fromDuration === 'full') {
+      const from = new Date(form.dates.from);
+      const to = new Date(form.dates.to);
+      let days = ((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      if (form.dates.toDuration === 'half') days -= 0.5;
+      if (days !== 7) return 'Paternity leave must be exactly 7 days';
     }
-    if (form.leaveType === 'Paternity' && form.duration === 'half') {
-      return 'Paternity leave cannot be applied as a half-day leave';
-    }
+    if (form.leaveType === 'Paternity' && form.dates.fromDuration === 'half') return 'Paternity leave cannot be applied as a half-day leave';
     return null;
   };
 
@@ -301,12 +243,17 @@ function LeaveForm() {
     try {
       const leaveData = new FormData();
       leaveData.append('leaveType', form.leaveType);
-      if (form.duration === 'full') {
-        leaveData.append('fullDay[from]', form.fullDay.from || '');
-        leaveData.append('fullDay[to]', form.fullDay.to || '');
-      } else if (form.duration === 'half') {
-        leaveData.append('halfDay[date]', form.halfDay.date || '');
-        leaveData.append('halfDay[session]', form.halfDay.session);
+      leaveData.append('fullDay[from]', form.dates.from || '');
+      if (form.dates.to) {
+        leaveData.append('fullDay[to]', form.dates.to || '');
+        leaveData.append('fullDay[toDuration]', form.dates.toDuration);
+        if (form.dates.toDuration === 'half') {
+          leaveData.append('fullDay[toSession]', form.dates.toSession);
+        }
+      }
+      leaveData.append('fullDay[fromDuration]', form.dates.fromDuration);
+      if (form.dates.fromDuration === 'half') {
+        leaveData.append('fullDay[fromSession]', form.dates.fromSession);
       }
       leaveData.append('reason', form.reason);
       leaveData.append('chargeGivenTo', form.chargeGivenTo);
@@ -322,9 +269,12 @@ function LeaveForm() {
       }
       console.log('Submitting FormData:', {
         leaveType: form.leaveType,
-        halfDayDate: form.halfDay.date,
-        fullDayFrom: form.fullDay.from,
-        fullDayTo: form.fullDay.to
+        fromDate: form.dates.from,
+        toDate: form.dates.to,
+        fromDuration: form.dates.fromDuration,
+        fromSession: form.dates.fromSession,
+        toDuration: form.dates.toDuration,
+        toSession: form.dates.toSession
       });
 
       await api.post('/leaves', leaveData, {
@@ -333,15 +283,13 @@ function LeaveForm() {
       alert('Leave submitted successfully');
       setForm({
         leaveType: '',
-        fullDay: { from: '', to: '' },
-        halfDay: { date: '', session: 'forenoon' },
+        dates: { from: '', to: '', fromDuration: 'full', fromSession: 'forenoon', toDuration: 'full', toSession: 'forenoon' },
         reason: '',
         chargeGivenTo: '',
         emergencyContact: '',
         compensatoryEntryId: '',
         restrictedHoliday: '',
         projectDetails: '',
-        duration: '',
         medicalCertificate: null
       });
       const res = await api.get('/dashboard/employee-info');
@@ -374,6 +322,8 @@ function LeaveForm() {
   const minDateOther = tomorrow.toISOString().split('T')[0];
   const currentDate = istTime.toISOString().split('T')[0];
 
+  const isToDateDisabled = form.dates.fromDuration === 'half' && form.dates.fromSession === 'forenoon';
+
   return (
     <ContentLayout title="Apply for Leave">
       <Card className="max-w-lg mx-auto shadow-lg border">
@@ -405,7 +355,7 @@ function LeaveForm() {
               <>
                 <div className="col-span-2">
                   <Label htmlFor="compensatoryBalance">Compensatory Leave Balance</Label>
-                  <p className="mt-1 text-sm text-gray-600">{compensatoryBalance} hours</p>
+                  <p className="mt-1 text-sm">{compensatoryBalance} hours</p>
                 </div>
                 <div className="col-span-2">
                   <Label htmlFor="compensatoryEntryId">Compensatory Leave Entry</Label>
@@ -419,7 +369,7 @@ function LeaveForm() {
                     </SelectTrigger>
                     <SelectContent>
                       {compensatoryEntries
-                        .filter(entry => entry.status === 'Available')
+                        .filter(entry => entry.status === 'valid')
                         .map(entry => (
                           <SelectItem key={entry._id} value={entry._id}>
                             {new Date(entry.date).toLocaleDateString()} - {entry.hours} hours
@@ -436,7 +386,7 @@ function LeaveForm() {
                     onChange={handleChange}
                     rows={2}
                   />
-                </div>  
+                </div>
               </>
             )}
 
@@ -460,18 +410,23 @@ function LeaveForm() {
             )}
 
             <div>
-              <Label htmlFor="duration">Leave Duration</Label>
+              <Label htmlFor="dates.from">From Date</Label>
+              <Input
+                id="dates.from"
+                name="dates.from"
+                type="date"
+                value={form.dates.from}
+                onChange={handleChange}
+                min={form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther}
+                max={form.leaveType === 'Medical' ? maxDateMedical : form.leaveType === 'Emergency' ? currentDate : ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="dates.fromDuration">From Duration</Label>
               <Select
-                onValueChange={(value) => {
-                  setForm(prev => ({
-                    ...prev,
-                    duration: value,
-                    halfDay: value === 'half' ? { date: '', session: 'forenoon' } : { date: '', session: 'forenoon' },
-                    fullDay: value === 'full' ? { from: '', to: '' } : { from: '', to: '' },
-                  }));
-                }}
-                value={form.duration}
-                aria-label="Select leave duration"
+                onValueChange={(value) => handleChange({ target: { name: 'dates.fromDuration', value } })}
+                value={form.dates.fromDuration}
+                aria-label="Select from duration"
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select duration" />
@@ -482,68 +437,76 @@ function LeaveForm() {
                 </SelectContent>
               </Select>
             </div>
-
-            {form.duration === 'half' ? (
-              <>
-                <div>
-                  <Label htmlFor="halfDay.session">Session</Label>
-                  <Select
-                    onValueChange={(value) => handleChange({ target: { name: 'halfDay.session', value } })}
-                    value={form.halfDay.session}
-                    aria-label="Select session"
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select session" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="forenoon">Forenoon</SelectItem>
-                      <SelectItem value="afternoon">Afternoon</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="halfDay.date">Half Day Date</Label>
-                  <Input
-                    id="halfDay.date"
-                    name="halfDay.date"
-                    type="date"
-                    value={form.halfDay.date}
-                    onChange={handleChange}
-                    min={form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther}
-                    max={form.leaveType === 'Medical' ? maxDateMedical : form.leaveType === 'Emergency' ? currentDate : ''}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <Label htmlFor="fullDay.from">From Date</Label>
-                  <Input
-                    id="fullDay.from"
-                    name="fullDay.from"
-                    type="date"
-                    value={form.fullDay.from}
-                    onChange={handleChange}
-                    min={form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther}
-                    max={form.leaveType === 'Medical' ? maxDateMedical : form.leaveType === 'Emergency' ? currentDate : ''}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="fullDay.to">To Date</Label>
-                  <Input
-                    id="fullDay.to"
-                    name="fullDay.to"
-                    type="date"
-                    value={form.fullDay.to}
-                    onChange={handleChange}
-                    min={form.fullDay.from || (form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther)}
-                    max={form.leaveType === 'Emergency' ? currentDate : ''}
-                  />
-                </div>
-              </>
+            {form.dates.fromDuration === 'half' && (
+              <div>
+                <Label htmlFor="dates.fromSession">From Session</Label>
+                <Select
+                  onValueChange={(value) => handleChange({ target: { name: 'dates.fromSession', value } })}
+                  value={form.dates.fromSession}
+                  aria-label="Select from session"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select session" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="forenoon">Forenoon</SelectItem>
+                    <SelectItem value="afternoon">Afternoon</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="dates.to">To Date</Label>
+              <Input
+                id="dates.to"
+                name="dates.to"
+                type="date"
+                value={form.dates.to}
+                onChange={handleChange}
+                min={form.dates.from || (form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther)}
+                max={form.leaveType === 'Emergency' ? currentDate : ''}
+                disabled={isToDateDisabled}
+              />
+            </div>
+            {!isToDateDisabled && (
+              <div>
+                <Label htmlFor="dates.toDuration">To Duration</Label>
+                <Select
+                  onValueChange={(value) => handleChange({ target: { name: 'dates.toDuration', value } })}
+                  value={form.dates.toDuration}
+                  aria-label="Select to duration"
+                  disabled={isToDateDisabled}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">Full Day</SelectItem>
+                    <SelectItem value="half">Half Day</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {!isToDateDisabled && form.dates.toDuration === 'half' && (
+              <div>
+                <Label htmlFor="dates.toSession">To Session</Label>
+                <Select
+                  onValueChange={(value) => handleChange({ target: { name: 'toSession', value } })}
+                  value={form.dates.toSession}
+                  aria-label="Select session"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select session" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="forenoon">Forenoon</SelectItem>
+                    <SelectItem value="afternoon" disabled>Afternoon</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
 
-            {form.leaveType === 'Medical' && form.duration === 'full' && (
+            {form.leaveType === 'Medical' && form.dates.fromDuration === 'full' && (
               <div className="col-span-2">
                 <Label htmlFor="medicalCertificate">Medical Certificate (JPEG/PDF, max 5MB)</Label>
                 <Input
@@ -566,7 +529,7 @@ function LeaveForm() {
               <Textarea
                 id="reason"
                 name="reason"
-                value={form.reason}
+                  value={form.reason}
                 onChange={handleChange}
                 rows={3}
                 placeholder="Enter reason..."
@@ -594,7 +557,7 @@ function LeaveForm() {
             </div>
 
             <div>
-              <Label htmlFor="emergencyContact">Emergency Contact</Label>
+              <Label htmlFor="emergencyContact">Emergency Contact Add. & No.</Label>
               <Input
                 id="emergencyContact"
                 name="emergencyContact"

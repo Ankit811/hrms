@@ -18,7 +18,7 @@ const leaveSchema = new mongoose.Schema({
       'Compensatory',
       'Restricted Holidays',
       'Leave Without Pay(LWP)',
-      'Emergency' // Added Emergency leave type
+      'Emergency'
     ],
     required: true
   },
@@ -29,8 +29,12 @@ const leaveSchema = new mongoose.Schema({
   },
 
   fullDay: {
-    from: { type: Date },
-    to: { type: Date }
+    from: { type: Date, required: true },
+    to: { type: Date },
+    fromDuration: { type: String, enum: ['full', 'half'], default: 'full' },
+    fromSession: { type: String, enum: ['forenoon', 'afternoon'] },
+    toDuration: { type: String, enum: ['full', 'half'] },
+    toSession: { type: String, enum: ['forenoon'] }
   },
 
   reason: { type: String, required: true },
@@ -41,10 +45,10 @@ const leaveSchema = new mongoose.Schema({
   compensatoryEntryId: { type: mongoose.Schema.Types.ObjectId, default: null },
   projectDetails: { type: String },
   restrictedHoliday: { type: String },
-  medicalCertificate: { type: mongoose.Schema.Types.ObjectId, ref: 'Uploads.files', default: null }, // New field for medical certificate
+  medicalCertificate: { type: mongoose.Schema.Types.ObjectId, ref: 'Uploads.files', default: null },
 
   status: {
-    hod: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    hod: { type: String, enum: ['Pending', 'Approved', 'Submitted', 'Rejected'], default: 'Pending' },
     admin: { type: String, enum: ['Pending', 'Acknowledged'], default: 'Pending' },
     ceo: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
   },
