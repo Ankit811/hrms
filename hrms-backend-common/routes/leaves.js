@@ -526,13 +526,10 @@ router.post(
       }
 
       const status = {
-        hod: req.user.role === "Employee" ? "Pending" : "Approved",
+        hod: req.user.role === "Employee" ? "Pending" : req.user.role === "HOD" ? "Submitted" : "Approved",
         ceo: "Pending",
         admin: "Pending",
       };
-      if (req.user.role === "HOD" || req.user.role === "Admin") {
-        status.hod = "Approved";
-      }
 
       const leave = new Leave({
         employeeId: user.employeeId,
@@ -978,7 +975,7 @@ router.put(
             global._io.to(leave.chargeGivenTo.employeeId).emit("notification", {
               message: `You are no longer assigned as Charge Given To for ${
                 leave.name
-              }'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}. You can now apply for non-Emergency leaves during this period.`,
+              }'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}. You can now apply for non-Emergency leaves.`,
             });
           }
         }
