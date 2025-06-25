@@ -107,20 +107,6 @@ router.post(
             if (toDuration === 'half') leaveDays -= 0.5;
           }
         }
-      } else if (req.body.halfDay?.date) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(req.body.halfDay.date)) {
-          return res
-            .status(400)
-            .json({
-              message: "Invalid half day date format (expected YYYY-MM-DD)",
-            });
-        }
-        leaveStart = new Date(req.body.halfDay.date);
-        leaveEnd = new Date(req.body.halfDay.date);
-        if (isNaN(leaveStart.getTime())) {
-          return res.status(400).json({ message: "Invalid half day date" });
-        }
-        leaveDays = 0.5;
       } else {
         return res.status(400).json({ message: "Invalid leave dates provided" });
       }
@@ -147,8 +133,8 @@ router.post(
           leaveEndStr,
           rawFullDayFrom: req.body.fullDay?.from,
           rawFullDayTo: req.body.fullDay?.to,
-          rawHalfDayDate: req.body.halfDay?.date,
           serverTime: new Date().toString(),
+          istTime: today.toString(),
         });
         if (leaveStartStr !== todayStr || leaveEndStr !== todayStr) {
           return res
@@ -194,28 +180,17 @@ router.post(
                   { 'fullDay.toDuration': 'half', 'fullDay.toSession': 'forenoon' }
                 ]
               })
-            },
-            {
-              "halfDay.date": { $gte: leaveStart, $lte: leaveEnd },
-              $and: [
-                { "status.hod": { $ne: "Rejected" } },
-                { "status.ceo": { $ne: "Rejected" } },
-                { "status.admin": { $in: ["Pending", "Acknowledged"] } },
-              ],
-            },
+            }
           ],
         });
         if (overlappingChargeAssignments.length > 0) {
           const leaveDetails = overlappingChargeAssignments[0];
-          const dateRangeStr = leaveDetails.halfDay?.date
-            ? `on ${
-                new Date(leaveDetails.halfDay.date).toISOString().split("T")[0]
-              } (${leaveDetails.halfDay.session})`
-            : `from ${
-                new Date(leaveDetails.fullDay.from).toISOString().split("T")[0]
-              }${leaveDetails.fullDay.fromDuration === 'half' ? ` (${leaveDetails.fullDay.fromSession})` : ''} to ${
-                new Date(leaveDetails.fullDay.to).toISOString().split("T")[0]
-              }${leaveDetails.fullDay.toDuration === 'half' ? ` (${leaveDetails.fullDay.toSession})` : ''}`;
+          const dateRangeStr =
+            `from ${
+              new Date(leaveDetails.fullDay.from).toISOString().split("T")[0]
+            }${leaveDetails.fullDay.fromDuration === 'half' ? ` (${leaveDetails.fullDay.fromSession})` : ''}${leaveDetails.fullDay.to ? ` to ${
+              new Date(leaveDetails.fullDay.to).toISOString().split("T")[0]
+            }${leaveDetails.fullDay.toDuration === 'half' ? ` (${leaveDetails.fullDay.toSession})` : ''}` : ''}`;
           return res.status(400).json({
             message: `You are assigned as Charge Given To for a leave ${dateRangeStr} and cannot apply for non-Emergency leaves during this period.`,
           });
@@ -253,45 +228,91 @@ router.post(
           .status(400)
           .json({ message: "Selected employee for Charge Given To not found" });
       }
-      // Check for overlapping charge assignments
+      // Check for overlapping charge assignments or employee's own leaves
+      const startDateOnly = new Date(leaveStart.setHours(0, 0, 0, 0));
+      const endDateOnly = new Date(leaveEnd.setHours(0, 0, 0, 0));
       const overlappingLeaves = await Leave.find({
-        chargeGivenTo: req.body.chargeGivenTo,
         $or: [
+          // Leaves where chargeGivenTo is assigned
           {
-            "fullDay.from": { $lte: leaveEnd },
-            "fullDay.to": { $gte: leaveStart },
-            $and: [
-              { "status.hod": { $in: ["Pending", "Approved"] } },
-              { "status.ceo": { $in: ["Pending", "Approved"] } },
-              { "status.admin": { $in: ["Pending", "Acknowledged"] } },
-            ],
+            chargeGivenTo: req.body.chargeGivenTo,
             $or: [
-              { 'fullDay.fromDuration': 'full' },
-              { 'fullDay.fromDuration': 'half', 'fullDay.fromSession': { $in: ['forenoon', 'afternoon'] } }
-            ],
-            ...(leaveStart.toISOString().split('T')[0] !== leaveEnd.toISOString().split('T')[0] && {
-              $or: [
-                { 'fullDay.toDuration': 'full' },
-                { 'fullDay.toDuration': 'half', 'fullDay.toSession': 'forenoon' }
-              ]
-            })
+              {
+                "fullDay.from": { $lte: leaveEnd },
+                "fullDay.to": { $gte: leaveStart },
+                $and: [
+                  { "status.hod": { $in: ["Pending", "Approved"] } },
+                  { "status.ceo": { $in: ["Pending", "Approved"] } },
+                  { "status.admin": { $in: ["Pending", "Acknowledged"] } },
+                ],
+                $or: [
+                  { 'fullDay.fromDuration': 'full' },
+                  { 'fullDay.fromDuration': 'half', 'fullDay.fromSession': { $in: ['forenoon', 'afternoon'] } }
+                ],
+                ...(leaveStart.toISOString().split('T')[0] !== leaveEnd.toISOString().split('T')[0] && {
+                  $or: [
+                    { 'fullDay.toDuration': 'full' },
+                    { 'fullDay.toDuration': 'half', 'fullDay.toSession': 'forenoon' }
+                  ]
+                })
+              },
+              {
+                "fullDay.from": { $gte: startDateOnly, $lte: endDateOnly },
+                "fullDay.to": { $gte: startDateOnly, $lte: endDateOnly },
+                "fullDay.fromDuration": 'half',
+                "fullDay.fromSession": { $in: ['forenoon', 'afternoon'] },
+                $and: [
+                  { "status.hod": { $in: ["Pending", "Approved"] } },
+                  { "status.ceo": { $in: ["Pending", "Approved"] } },
+                  { "status.admin": { $in: ["Pending", "Acknowledged"] } },
+                ]
+              }
+            ]
           },
+          // Leaves where chargeGivenTo is the employee
           {
-            "halfDay.date": { $gte: leaveStart, $lte: leaveEnd },
-            $and: [
-              { "status.hod": { $in: ["Pending", "Approved"] } },
-              { "status.ceo": { $in: ["Pending", "Approved"] } },
-              { "status.admin": { $in: ["Pending", "Acknowledged"] } },
-            ],
-          },
-        ],
+            employee: req.body.chargeGivenTo,
+            $or: [
+              {
+                "fullDay.from": { $lte: leaveEnd },
+                "fullDay.to": { $gte: leaveStart },
+                $and: [
+                  { "status.hod": { $in: ["Pending", "Approved"] } },
+                  { "status.ceo": { $in: ["Pending", "Approved"] } },
+                  { "status.admin": { $in: ["Pending", "Acknowledged"] } },
+                ],
+                $or: [
+                  { 'fullDay.fromDuration': 'full' },
+                  { 'fullDay.fromDuration': 'half', 'fullDay.fromSession': { $in: ['forenoon', 'afternoon'] } }
+                ],
+                ...(leaveStart.toISOString().split('T')[0] !== leaveEnd.toISOString().split('T')[0] && {
+                  $or: [
+                    { 'fullDay.toDuration': 'full' },
+                    { 'fullDay.toDuration': 'half', 'fullDay.toSession': 'forenoon' }
+                  ]
+                })
+              },
+              {
+                "fullDay.from": { $gte: startDateOnly, $lte: endDateOnly },
+                "fullDay.to": { $gte: startDateOnly, $lte: endDateOnly },
+                "fullDay.fromDuration": 'half',
+                "fullDay.fromSession": { $in: ['forenoon', 'afternoon'] },
+                $and: [
+                  { "status.hod": { $in: ["Pending", "Approved"] } },
+                  { "status.ceo": { $in: ["Pending", "Approved"] } },
+                  { "status.admin": { $in: ["Pending", "Acknowledged"] } },
+                ]
+              }
+            ]
+          }
+        ]
       });
       if (overlappingLeaves.length > 0) {
         return res
           .status(400)
           .json({
             message:
-              "Selected employee is already assigned as Charge Given To for the specified date range",
+              "Selected employee is either already assigned as Charge Given To or has a pending/approved leave for the specified date range",
           });
       }
 
@@ -336,10 +357,7 @@ router.post(
             employeeId: user.employeeId,
             leaveType: "Medical",
             "status.admin": "Acknowledged",
-            $or: [
-              { "fullDay.from": { $gte: new Date(currentYear, 0, 1) } },
-              { "halfDay.date": { $gte: new Date(currentYear, 0, 1) } },
-            ],
+            'fullDay.from': { $gte: new Date(currentYear, 0, 1) }
           });
           if (medicalLeavesThisYear.length > 0) {
             return res
@@ -426,10 +444,7 @@ router.post(
           const existingRestrictedLeave = await Leave.findOne({
             employeeId: user.employeeId,
             leaveType: "Restricted Holidays",
-            $or: [
-              { "fullDay.from": { $gte: new Date(currentYear, 0, 1) } },
-              { "halfDay.date": { $gte: new Date(currentYear, 0, 1) } },
-            ],
+            'fullDay.from': { $gte: new Date(currentYear, 0, 1) },
             $or: [
               { "status.hod": { $in: ["Pending", "Approved"] } },
               { "status.ceo": { $in: ["Pending", "Approved"] } },
@@ -538,10 +553,9 @@ router.post(
         designation: user.designation,
         department: user.department,
         leaveType: req.body.leaveType,
-        halfDay: req.body.halfDay,
         fullDay: {
           from: req.body.fullDay?.from,
-          to: req.body.fullDay?.to || req.body.fullDay?.from || req.body.halfDay?.date,
+          to: req.body.fullDay?.to || req.body.fullDay?.from,
           fromDuration: req.body.fullDay?.fromDuration || 'full',
           fromSession: req.body.fullDay?.fromSession,
           toDuration: req.body.fullDay?.toDuration || 'full',
@@ -560,9 +574,8 @@ router.post(
       await leave.save();
 
       // Notify the chargeGivenTo employee
-      const dateRangeStr = req.body.halfDay?.date
-        ? `on ${req.body.halfDay.date} (${req.body.halfDay.session})`
-        : `from ${req.body.fullDay.from}${req.body.fullDay.fromDuration === 'half' ? ` (${req.body.fullDay.fromSession})` : ''} to ${req.body.fullDay.to}${req.body.fullDay.toDuration === 'half' ? ` (${req.body.fullDay.toSession})` : ''}`;
+      const dateRangeStr =
+        `from ${req.body.fullDay.from}${req.body.fullDay.fromDuration === 'half' ? ` (${req.body.fullDay.fromSession})` : ''}${req.body.fullDay.to ? ` to ${req.body.fullDay.to}${req.body.fullDay.toDuration === 'half' ? ` (${req.body.fullDay.toSession})` : ''}` : ''}`;
       await Notification.create({
         userId: chargeGivenToEmployee.employeeId,
         message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}. You cannot apply for non-Emergency leaves during this period until the leave is rejected.`,
@@ -684,20 +697,13 @@ router.get("/", auth, async (req, res) => {
     if (fromDate) {
       const startDate = new Date(fromDate);
       startDate.setHours(0, 0, 0, 0);
-      query.$or = [
-        { "fullDay.from": { $gte: startDate } },
-        { "halfDay.date": { $gte: startDate } },
-      ];
+      query['fullDay.from'] = { $gte: startDate };
     }
 
     if (toDate) {
       const endDate = new Date(toDate);
       endDate.setHours(23, 59, 59, 999);
-      query.$or = query.$or.value || [];
-      query.$or.push(
-        { "fullDay.to": { $lte: endDate } },
-        { "halfDay.date": { $lte: endDate } },
-      );
+      query['fullDay.to'] = { $lte: endDate };
     }
 
     const total = await Leave.countDocuments(query);
@@ -807,10 +813,10 @@ router.put(
           });
       }
 
-      if (req.user.role === "CEO" && leave.status.hod !== "Approved") {
+      if (req.user.role === "CEO" && !["Approved", "Submitted"].includes(leave.status.hod)) {
         return res
           .status(400)
-          .json({ message: "Leave must be approved by HOD first" });
+          .json({ message: "Leave must be approved or Submitted by HOD first" });
       }
 
       if (req.user.role === "Admin" && leave.status.ceo !== "Approved") {
@@ -824,7 +830,7 @@ router.put(
         leave.remarks = remarks;
       }
 
-      if (status === "Approved" && currentStage === "hod") {
+      if (["Approved", "Submitted"].includes(status) && currentStage === "hod") {
         leave.status.ceo = "Pending";
         const ceo = await Employee.findOne({ loginType: "CEO" });
         if (ceo) {
@@ -865,20 +871,22 @@ router.put(
         switch (leave.leaveType) {
           case "Casual":
             await employee.deductPaidLeaves(
-              leave.fullDay?.from || leave.halfDay?.date,
-              leave.fullDay?.to || leave.halfDay?.date,
+              leave.fullDay.from,
+              leave.fullDay.to,
               leave.leaveType
             );
             break;
           case "Medical":
             await employee.deductMedicalLeaves(
               leave,
-              leave.halfDay
+              leave.fullDay.fromDuration === 'half' && leave.fullDay.from === leave.fullDay.to
                 ? 0.5
                 : leave.fullDay?.from && leave.fullDay?.to
                 ? (new Date(leave.fullDay.to) - new Date(leave.fullDay.from)) /
                     (1000 * 60 * 60 * 24) +
-                  1
+                  1 -
+                  (leave.fullDay.fromDuration === 'half' ? 0.5 : 0) -
+                  (leave.fullDay.toDuration === 'half' ? 0.5 : 0)
                 : 0
             );
             break;
@@ -901,32 +909,35 @@ router.put(
             await employee.deductCompensatoryLeaves(leave.compensatoryEntryId);
             break;
           case "Emergency":
-            const leaveDays = leave.halfDay
-              ? 0.5
-              : leave.fullDay?.from && leave.fullDay?.to
-              ? (new Date(leave.fullDay.to) - new Date(leave.fullDay.from)) /
-                  (1000 * 60 * 60 * 24) +
-                1
-              : 1;
+            const leaveDays =
+              leave.fullDay.fromDuration === 'half' && leave.fullDay.from === leave.fullDay.to
+                ? 0.5
+                : leave.fullDay?.from && leave.fullDay.to
+                ? (new Date(leave.fullDay.to) - new Date(leave.fullDay.from)) /
+                    (1000 * 60 * 60 * 24) +
+                  1 -
+                  (leave.fullDay.fromDuration === 'half' ? 0.5 : 0) -
+                  (leave.fullDay.toDuration === 'half' ? 0.5 : 0)
+                : 1;
             if (employee.paidLeaves >= leaveDays) {
               await employee.deductPaidLeaves(
-                leave.fullDay?.from || leave.halfDay?.date,
-                leave.fullDay?.to || leave.halfDay?.date,
+                leave.fullDay.from,
+                leave.fullDay.to,
                 leave.leaveType
               );
             } else {
               await employee.incrementUnpaidLeaves(
-                leave.fullDay?.from || leave.halfDay?.date,
-                leave.fullDay?.to || leave.halfDay?.date,
-                leave.leaveType
+                leave.fullDay.from,
+                leave.fullDay.to,
+                leave.employee
               );
             }
             break;
           case "Leave Without Pay(LWP)":
             await employee.incrementUnpaidLeaves(
-              leave.fullDay?.from || leave.halfDay?.date,
-              leave.fullDay?.to || leave.halfDay?.date,
-              leave.leaveType
+              leave.fullDay.from,
+              leave.fullDay.to,
+              leave.employee
             );
             break;
           default:
@@ -958,11 +969,8 @@ router.put(
 
         // Notify the chargeGivenTo employee that they are no longer assigned
         if (leave.chargeGivenTo) {
-          const dateRangeStr = leave.halfDay.date
-            ? `on ${
-                new Date(leave.halfDay.date).toISOString().split("T")[0]
-              } (${leave.halfDay.session})`
-            : `from ${
+          const dateRangeStr =
+            `from ${
                 new Date(leave.fullDay.from).toISOString().split("T")[0]
               }${leave.fullDay.fromDuration === 'half' ? ` (${leave.fullDay.fromSession})` : ''}${leave.fullDay.to ? ` to ${new Date(leave.fullDay.to).toISOString().split("T")[0]}${leave.fullDay.toDuration === 'half' ? ` (${leave.fullDay.toSession})` : ''}` : ''}`;
           await Notification.create({
